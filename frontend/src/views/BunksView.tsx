@@ -203,13 +203,13 @@ export const BunksView: React.FC<BunksViewProps> = ({
   );
 
   const supportedTimezones = [
-    { value: 'Asia/Kolkata', label: 'Asia/Kolkata (IST +05:30) · India Standard Time' },
-    { value: 'Asia/Dubai', label: 'Asia/Dubai (GST +04:00) · Gulf Standard Time' },
-    { value: 'Asia/Riyadh', label: 'Asia/Riyadh (AST +03:00) · Arabia Standard Time' },
-    { value: 'Asia/Singapore', label: 'Asia/Singapore (SGT +08:00) · Singapore Standard Time' },
-    { value: 'Europe/London', label: 'Europe/London (GMT/BST +00:00/+01:00) · UK Standard Time' },
-    { value: 'America/New_York', label: 'America/New_York (EST/EDT -05:00/-04:00) · US Eastern Time' },
-    { value: 'UTC', label: 'UTC (UTC +00:00) · Coordinated Universal Time' },
+    { value: 'Asia/Kolkata', label: 'Asia/Kolkata (IST +05:30) \u00B7 India Standard Time' },
+    { value: 'Asia/Dubai', label: 'Asia/Dubai (GST +04:00) \u00B7 Gulf Standard Time' },
+    { value: 'Asia/Riyadh', label: 'Asia/Riyadh (AST +03:00) \u00B7 Arabia Standard Time' },
+    { value: 'Asia/Singapore', label: 'Asia/Singapore (SGT +08:00) \u00B7 Singapore Standard Time' },
+    { value: 'Europe/London', label: 'Europe/London (GMT/BST +00:00/+01:00) \u00B7 UK Standard Time' },
+    { value: 'America/New_York', label: 'America/New_York (EST/EDT -05:00/-04:00) \u00B7 US Eastern Time' },
+    { value: 'UTC', label: 'UTC (UTC +00:00) \u00B7 Coordinated Universal Time' },
   ];
 
   const canManageBunks = currentRole === 'OWNER';
@@ -625,7 +625,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                   type: 'BUNK',
                   id: activeBunk.code || activeBunk.id,
                   name: activeBunk.name,
-                  subtitle: `${activeBunk.location} · ${bunkTanks.length} Tanks · ${bunkNozzles.length} Nozzles`,
+                  subtitle: `${activeBunk.location} \u00B7 ${bunkTanks.length} Tanks \u00B7 ${bunkNozzles.length} Nozzles`,
                 })
               }
               className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer shadow-2xs"
@@ -838,7 +838,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                               </span>
                             </div>
                             <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                              Dip: {tank.currentDipCm} cm · Water: {tank.waterDipCm} cm
+                              Dip: {tank.currentDipCm} cm \u00B7 Water: {tank.waterDipCm} cm
                             </span>
                           </div>
                           <div className="text-right">
@@ -878,7 +878,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                   Underground Fuel Storage Tanks for {activeBunk.name}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Hierarchy: Bunk Master → {activeBunk.name} → Tanks. Each tank belongs strictly to this bunk.
+                  Hierarchy: Bunk Master &rarr; {activeBunk.name} &rarr; Tanks. Each tank belongs strictly to this bunk.
                 </p>
               </div>
 
@@ -1053,7 +1053,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                       return (
                         <tr key={nz.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
                           <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">
-                            #{nz.nozzleNumber} {nz.name ? `· ${nz.name}` : ''}
+                            #{nz.nozzleNumber} {nz.name ? `\u00B7 ${nz.name}` : ''}
                           </td>
                           <td className="px-4 py-3">
                             {(() => {
@@ -1342,7 +1342,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                         value: t.id,
                         label: `Tank #${t.tankNumber}: ${t.name || t.id}`,
                         badge: t.fuelCode,
-                        description: `Grade: ${t.fuelCode} · Cap: ${t.capacityLiters.toLocaleString()} L`,
+                        description: `Grade: ${t.fuelCode} \u00B7 Cap: ${t.capacityLiters.toLocaleString()} L`,
                       })),
                     ]}
                     value={nozzleFormData.tankId}
@@ -1427,7 +1427,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
-                    Electronic Totalizer (Liters) <span className="text-emerald-600 font-normal">(Locked · Initial Register)</span>
+                    Electronic Totalizer (Liters) <span className="text-emerald-600 font-normal">(Locked \u00B7 Initial Register)</span>
                   </label>
                   <input
                     type="number"
@@ -1607,7 +1607,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                         </span>
                         {station.cityState && (
                           <span className="text-[11px] text-slate-400 block truncate">
-                            {station.cityState} {station.postalCode ? `· ${station.postalCode}` : ''}
+                            {station.cityState} {station.postalCode ? `\u00B7 ${station.postalCode}` : ''}
                           </span>
                         )}
                       </td>
@@ -1676,7 +1676,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                                 type: 'BUNK',
                                 id: station.code || station.id,
                                 name: station.name,
-                                subtitle: `${station.location} · ${stationNozzleCount} Nozzles`,
+                                subtitle: `${station.location} \u00B7 ${stationNozzleCount} Nozzles`,
                               })
                             }
                             className="p-1 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
@@ -1911,7 +1911,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                   Cannot Delete Nozzle #{blockedNozzleDelete.nozzle.nozzleNumber}
                 </h3>
                 <span className="text-xs text-slate-500 font-mono">
-                  {blockedNozzleDelete.nozzle.fuelCode} · Totalizer: {blockedNozzleDelete.nozzle.electronicTotalizer.toLocaleString()} L
+                  {blockedNozzleDelete.nozzle.fuelCode} \u00B7 Totalizer: {blockedNozzleDelete.nozzle.electronicTotalizer.toLocaleString()} L
                 </span>
               </div>
             </div>
@@ -1968,7 +1968,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                   Delete Nozzle #{deletingNozzle.nozzleNumber}?
                 </h3>
                 <span className="text-xs text-slate-500 font-mono">
-                  {deletingNozzle.fuelCode} · Totalizer: 0.00 L
+                  {deletingNozzle.fuelCode} \u00B7 Totalizer: 0.00 L
                 </span>
               </div>
             </div>

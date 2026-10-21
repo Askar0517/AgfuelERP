@@ -214,7 +214,7 @@ export const Header: React.FC<HeaderProps> = ({
               <Clock className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span className="font-semibold text-slate-900 dark:text-white tabular-nums">{currentTime || '...'}</span>
               <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans hidden lg:inline">
-                · {currentDate} ({currentStation?.timezone || 'IST'})
+                \u00B7 {currentDate} ({currentStation?.timezone || 'IST'})
               </span>
             </div>
 
@@ -475,7 +475,7 @@ export const Header: React.FC<HeaderProps> = ({
                   aria-hidden="true"
                 />
                 <span className="font-sans font-medium text-slate-600 dark:text-slate-400 text-[11px]">{fuel.shortName}</span>
-                <span className="font-bold text-slate-900 dark:text-white tabular-nums">₹{fuel.ratePerLiter.toFixed(2)}</span>
+                <span className="font-bold text-slate-900 dark:text-white tabular-nums">\u20B9{fuel.ratePerLiter.toFixed(2)}</span>
               </div>
             ))}
           </div>

@@ -143,7 +143,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         phone: phone.trim(),
         shiftSchedule,
         assignedIsland,
-        avatarUrl: avatarUrl !== undefined ? avatarUrl : undefined,
+        avatarUrl: avatarUrl || undefined,
       });
       notifySuccess('Profile Updated', 'Your contact details and shift schedule have been saved.');
     } catch (err: any) {

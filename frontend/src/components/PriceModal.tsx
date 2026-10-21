@@ -112,12 +112,12 @@ export const PriceModal: React.FC<PriceModalProps> = ({
                       <span>{def.displayName}</span>
                     </label>
                     <span className="font-mono text-xs text-slate-500 dark:text-gray-400">
-                      Current: ₹{fuel.ratePerLiter.toFixed(2)}
+                      Current: \u20B9{fuel.ratePerLiter.toFixed(2)}
                     </span>
                   </div>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3 top-2.5 text-xs text-slate-400 dark:text-gray-500 font-mono">
-                    ₹
+                    \u20B9
                   </span>
                   <input
                     type="number"
@@ -183,7 +183,7 @@ export const PriceModal: React.FC<PriceModalProps> = ({
                 <div key={f.code} className="flex justify-between">
                   <span className="text-slate-600 dark:text-slate-400">{getFuelDefinition(f.code).displayName}:</span>
                   <span>
-                    ₹{f.ratePerLiter.toFixed(2)} → <strong className="text-emerald-600 dark:text-emerald-400">₹{(rates[f.code] || f.ratePerLiter).toFixed(2)}</strong>
+                    \u20B9{f.ratePerLiter.toFixed(2)} &rarr; <strong className="text-emerald-600 dark:text-emerald-400">\u20B9{(rates[f.code] || f.ratePerLiter).toFixed(2)}</strong>
                   </span>
                 </div>
               ))}

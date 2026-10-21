@@ -59,7 +59,7 @@ export const DSRView: React.FC<DSRViewProps> = ({
       const testing = fuelReadings.reduce((sum, r) => sum + r.testingLiters, 0);
       const revenue = fuelReadings.reduce((sum, r) => sum + r.netSalesAmount, 0);
 
-      const currentVol = tank ? tank.currentVolumeLiters : 15000;
+      const currentVol = tank ? tank.currentVolumeLiters : 0;
       const opening = currentVol + meterSales;
       const expected = opening - meterSales;
       const variance = Number((currentVol - expected).toFixed(1));

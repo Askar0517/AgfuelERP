@@ -69,7 +69,7 @@ function AppContent() {
 
   // Forecourt Database Records
   const [stations, setStations] = useState<Station[]>([]);
-  const [currentStationId, setCurrentStationId] = useState<string>('st-101');
+  const [currentStationId, setCurrentStationId] = useState<string>('');
   const [fuels, setFuels] = useState<FuelProduct[]>([]);
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [dispensers, setDispensers] = useState<Dispenser[]>([]);
@@ -533,6 +533,8 @@ function AppContent() {
     status: 'ONLINE',
     timezone: 'Asia/Kolkata',
     eodCloseTime: '23:59',
+    managerName: 'Unassigned',
+    phone: '',
   };
 
   const currentStation = stations.find((s) => s.id === currentStationId) || stations[0] || fallbackStation;

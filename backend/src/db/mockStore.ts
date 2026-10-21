@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+﻿import crypto from 'crypto';
 import { SYSTEM_ROLES, APP_MODULES } from '../utils/rolesAndPermissions.ts';
 import { normalizeFuelCode } from '../utils/fuelConfig.ts';
 
@@ -54,72 +54,16 @@ export function correctDensity15C(observedDensity: number, tempC: number, fuelCo
   return Number((observedDensity + deltaT * coef).toFixed(1));
 }
 
-export const DEFAULT_DEMO_USERS = [
+export const DEFAULT_DEMO_USERS: any[] = [
   {
     id: 'emp-admin-001',
-    name: 'Vikramaditya Singhania',
+    name: 'Administrator',
     email: 'admin@petropulse.io',
     username: 'admin',
     role: 'OWNER',
-    phone: '+91 98200 12345',
-    stationId: 'st-101',
-    assignedBunks: JSON.stringify(['st-101', 'st-102']),
-    status: 'ACTIVE',
-    isActive: true,
-    shiftSchedule: 'GENERAL',
-    passwordHash: null,
-  },
-  {
-    id: 'emp-mgr-002',
-    name: 'Rajesh Sharma',
-    email: 'rsharma@petropulse.io',
-    username: 'rsharma',
-    role: 'MANAGER',
-    phone: '+91 98200 22345',
-    stationId: 'st-101',
-    assignedBunks: JSON.stringify(['st-101']),
-    status: 'ACTIVE',
-    isActive: true,
-    shiftSchedule: 'MORNING',
-    passwordHash: null,
-  },
-  {
-    id: 'emp-att-003',
-    name: 'Suresh Kumar',
-    email: 'skumar@petropulse.io',
-    username: 'skumar',
-    role: 'ATTENDANT',
-    phone: '+91 98200 32345',
-    stationId: 'st-101',
-    assignedBunks: JSON.stringify(['st-101']),
-    status: 'ACTIVE',
-    isActive: true,
-    shiftSchedule: 'MORNING',
-    passwordHash: null,
-  },
-  {
-    id: 'emp-csh-004',
-    name: 'Ramesh Patel',
-    email: 'rpatel@petropulse.io',
-    username: 'rpatel',
-    role: 'CASHIER',
-    phone: '+91 98200 42345',
-    stationId: 'st-101',
-    assignedBunks: JSON.stringify(['st-101']),
-    status: 'ACTIVE',
-    isActive: true,
-    shiftSchedule: 'EVENING',
-    passwordHash: null,
-  },
-  {
-    id: 'emp-aud-005',
-    name: 'Anil Deshmukh',
-    email: 'adeshmukh@petropulse.io',
-    username: 'adeshmukh',
-    role: 'AUDITOR',
-    phone: '+91 98200 52345',
-    stationId: 'st-101',
-    assignedBunks: JSON.stringify(['st-101']),
+    phone: '+91 98000 00000',
+    stationId: '',
+    assignedBunks: JSON.stringify([]),
     status: 'ACTIVE',
     isActive: true,
     shiftSchedule: 'GENERAL',
@@ -127,371 +71,19 @@ export const DEFAULT_DEMO_USERS = [
   },
 ];
 
-export const DEFAULT_STATIONS = [
-  {
-    id: 'st-101',
-    name: 'Metro Central Forecourt',
-    code: 'BUNK-000001',
-    location: 'Connaught Place Outer Ring, New Delhi',
-    managerId: 'emp-mgr-002',
-    managerName: 'Rajesh Sharma',
-    phone: '+91 98200 22345',
-    operatingHours: '24_HOURS',
-    status: 'ONLINE',
-    timezone: 'Asia/Kolkata',
-    currency: 'INR',
-    eodCloseTime: '23:59',
-    nozzleCount: 4,
-    tankCount: 3,
-  },
-  {
-    id: 'st-102',
-    name: 'Highway Plaza Express',
-    code: 'BUNK-000002',
-    location: 'NH-48 KM 42, Gurugram, Haryana',
-    managerId: 'emp-mgr-002',
-    managerName: 'Rajesh Sharma',
-    phone: '+91 98200 22345',
-    operatingHours: '24_HOURS',
-    status: 'ONLINE',
-    timezone: 'Asia/Kolkata',
-    currency: 'INR',
-    eodCloseTime: '23:59',
-    nozzleCount: 4,
-    tankCount: 3,
-  },
-  {
-    id: 'st-103',
-    name: 'Dubai Marina Forecourt',
-    code: 'BUNK-000003',
-    location: 'Sheikh Zayed Road, Dubai Marina, Dubai, UAE',
-    managerId: 'emp-mgr-002',
-    managerName: 'Rajesh Sharma',
-    phone: '+971 4 399 1234',
-    operatingHours: '24_HOURS',
-    status: 'ONLINE',
-    timezone: 'Asia/Dubai',
-    currency: 'AED',
-    eodCloseTime: '23:59',
-    nozzleCount: 4,
-    tankCount: 3,
-  },
-  {
-    id: 'st-104',
-    name: 'Abu Dhabi Corniche Plaza',
-    code: 'BUNK-000004',
-    location: 'Corniche Road, Abu Dhabi, UAE',
-    managerId: 'emp-mgr-002',
-    managerName: 'Rajesh Sharma',
-    phone: '+971 2 681 5678',
-    operatingHours: '24_HOURS',
-    status: 'ONLINE',
-    timezone: 'Asia/Dubai',
-    currency: 'AED',
-    eodCloseTime: '23:59',
-    nozzleCount: 4,
-    tankCount: 3,
-  },
-];
+export const DEFAULT_STATIONS: any[] = [];
 
-export const DEFAULT_FUELS = [
-  {
-    code: 'OCTANE_98',
-    name: '98 Octane',
-    shortName: '98 Oct',
-    ratePerLiter: 112.5,
-    densityStd15c: 752.0,
-    densityTolerance: 3.0,
-    color: '#DC2626',
-  },
-  {
-    code: 'OCTANE_95',
-    name: '95 Octane',
-    shortName: '95 Oct',
-    ratePerLiter: 104.25,
-    densityStd15c: 745.0,
-    densityTolerance: 3.0,
-    color: '#16A34A',
-  },
-  {
-    code: 'DIESEL',
-    name: 'Diesel',
-    shortName: 'Diesel',
-    ratePerLiter: 92.8,
-    densityStd15c: 830.0,
-    densityTolerance: 3.0,
-    color: '#EAB308',
-  },
-];
+export const DEFAULT_FUELS: any[] = [];
 
-export const DEFAULT_TANKS = [
-  {
-    id: 'TANK-000001',
-    stationId: 'st-101',
-    stationName: 'Metro Central Forecourt',
-    tankNumber: 1,
-    name: 'Tank 1 - 95 Octane',
-    fuelCode: 'OCTANE_95',
-    capacityLiters: 25000,
-    safeCapacityLiters: 23500,
-    currentDipCm: 185,
-    currentVolumeLiters: 18200,
-    openingStockLiters: 18200,
-    waterDipCm: 0.1,
-    lowThresholdLiters: 4000,
-    maxDipCm: 250,
-    status: 'ACTIVE',
-  },
-  {
-    id: 'TANK-000002',
-    stationId: 'st-101',
-    stationName: 'Metro Central Forecourt',
-    tankNumber: 2,
-    name: 'Tank 2 - Diesel',
-    fuelCode: 'DIESEL',
-    capacityLiters: 30000,
-    safeCapacityLiters: 28500,
-    currentDipCm: 210,
-    currentVolumeLiters: 24500,
-    openingStockLiters: 24500,
-    waterDipCm: 0.2,
-    lowThresholdLiters: 5000,
-    maxDipCm: 250,
-    status: 'ACTIVE',
-  },
-  {
-    id: 'TANK-000003',
-    stationId: 'st-101',
-    stationName: 'Metro Central Forecourt',
-    tankNumber: 3,
-    name: 'Tank 3 - 98 Octane',
-    fuelCode: 'OCTANE_98',
-    capacityLiters: 20000,
-    safeCapacityLiters: 19000,
-    currentDipCm: 160,
-    currentVolumeLiters: 14500,
-    openingStockLiters: 14500,
-    waterDipCm: 0.1,
-    lowThresholdLiters: 3000,
-    maxDipCm: 250,
-    status: 'ACTIVE',
-  },
-];
+export const DEFAULT_TANKS: any[] = [];
 
-export const DEFAULT_DISPENSERS = [
-  {
-    id: 'disp-01',
-    stationId: 'st-101',
-    dispenserNumber: 1,
-    brand: 'Gilbarco Veeder-Root',
-    model: 'Ensign 4x4',
-    islandNumber: 1,
-    status: 'ACTIVE',
-    nozzles: [],
-  },
-  {
-    id: 'disp-02',
-    stationId: 'st-101',
-    dispenserNumber: 2,
-    brand: 'Wayne Dresser',
-    model: 'Ovation 2',
-    islandNumber: 2,
-    status: 'ACTIVE',
-    nozzles: [],
-  },
-];
+export const DEFAULT_DISPENSERS: any[] = [];
 
-export const DEFAULT_NOZZLES = [
-  {
-    id: 'NOZZ-000001',
-    stationId: 'st-101',
-    dispenserId: 'disp-01',
-    nozzleNumber: 1,
-    fuelCode: 'OCTANE_95',
-    tankId: 'TANK-000001',
-    name: 'Nozzle 1 (95 Octane)',
-    status: 'ACTIVE',
-    electronicTotalizer: 14820.5,
-    mechanicalTotalizer: 14820,
-    dispenserNumber: 1,
-  },
-  {
-    id: 'NOZZ-000002',
-    stationId: 'st-101',
-    dispenserId: 'disp-01',
-    nozzleNumber: 2,
-    fuelCode: 'DIESEL',
-    tankId: 'TANK-000002',
-    name: 'Nozzle 2 (Diesel)',
-    status: 'ACTIVE',
-    electronicTotalizer: 28590.2,
-    mechanicalTotalizer: 28590,
-    dispenserNumber: 1,
-  },
-  {
-    id: 'NOZZ-000003',
-    stationId: 'st-101',
-    dispenserId: 'disp-02',
-    nozzleNumber: 1,
-    fuelCode: 'OCTANE_98',
-    tankId: 'TANK-000003',
-    name: 'Nozzle 3 (98 Octane)',
-    status: 'ACTIVE',
-    electronicTotalizer: 8420.0,
-    mechanicalTotalizer: 8420,
-    dispenserNumber: 2,
-  },
-  {
-    id: 'NOZZ-000004',
-    stationId: 'st-101',
-    dispenserId: 'disp-02',
-    nozzleNumber: 2,
-    fuelCode: 'OCTANE_95',
-    tankId: 'TANK-000001',
-    name: 'Nozzle 4 (95 Octane)',
-    status: 'ACTIVE',
-    electronicTotalizer: 19340.5,
-    mechanicalTotalizer: 19340,
-    dispenserNumber: 2,
-  },
-];
+export const DEFAULT_NOZZLES: any[] = [];
 
-export const DEFAULT_TANK_LOADS = [
-  {
-    id: 'load-seed-001',
-    stationId: 'st-101',
-    tankId: 'TANK-000003',
-    fuelCode: 'OCTANE_98',
-    timestamp: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
-    invoiceNo: 'INV-IOCL-98214',
-    tankerNumber: 'DL-01-AX-4821',
-    invoiceVolumeLiters: 10000,
-    invoiceDensity: 745.0,
-    observedDensity: 745.2,
-    observedTemp: 22.5,
-    correctedDensity15c: 746.0,
-    correctedDensity15C: 746.0,
-    densityStatus: 'PASSED',
-    dipBeforeCm: 110,
-    volumeBeforeLiters: 4500,
-    dipAfterCm: 160,
-    volumeAfterLiters: 14500,
-    receivedVolumeLiters: 10000,
-    varianceLiters: 0,
-    variancePct: 0.0,
-    operatorName: 'Rajesh Sharma (Manager)',
-    remarks: 'Verified IOCL tanker discharge into Tank 3. ASTM-53B density passed.',
-  },
-  {
-    id: 'load-seed-002',
-    stationId: 'st-101',
-    tankId: 'TANK-000001',
-    fuelCode: 'OCTANE_95',
-    timestamp: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
-    invoiceNo: 'INV-BPCL-77412',
-    tankerNumber: 'HR-26-CV-8910',
-    invoiceVolumeLiters: 12000,
-    invoiceDensity: 745.0,
-    observedDensity: 744.8,
-    observedTemp: 24.0,
-    correctedDensity15c: 745.5,
-    correctedDensity15C: 745.5,
-    densityStatus: 'PASSED',
-    dipBeforeCm: 95,
-    volumeBeforeLiters: 6200,
-    dipAfterCm: 185,
-    volumeAfterLiters: 18200,
-    receivedVolumeLiters: 12000,
-    varianceLiters: 0,
-    variancePct: 0.0,
-    operatorName: 'Rajesh Sharma (Manager)',
-    remarks: 'Standard BPCL decanting completed. Dip stick checked before & after.',
-  },
-  {
-    id: 'load-seed-003',
-    stationId: 'st-101',
-    tankId: 'TANK-000002',
-    fuelCode: 'DIESEL',
-    timestamp: new Date(Date.now() - 72 * 3600 * 1000).toISOString(),
-    invoiceNo: 'INV-HPCL-63201',
-    tankerNumber: 'UP-14-BT-1122',
-    invoiceVolumeLiters: 15000,
-    invoiceDensity: 830.0,
-    observedDensity: 829.8,
-    observedTemp: 23.5,
-    correctedDensity15c: 830.4,
-    correctedDensity15C: 830.4,
-    densityStatus: 'PASSED',
-    dipBeforeCm: 120,
-    volumeBeforeLiters: 9500,
-    dipAfterCm: 210,
-    volumeAfterLiters: 24500,
-    receivedVolumeLiters: 15000,
-    varianceLiters: 0,
-    variancePct: 0.0,
-    operatorName: 'Suresh Kumar (Attendant)',
-    remarks: 'Full 15kL bulk diesel decanting verified under supervisor oversight.',
-  },
-];
+export const DEFAULT_TANK_LOADS: any[] = [];
 
-export const DEFAULT_METER_READINGS = [
-  {
-    id: 'READ-000001',
-    stationId: 'st-101',
-    nozzleId: 'NOZZ-000001',
-    fuelCode: 'OCTANE_95',
-    readingTimestamp: new Date(Date.now() - 12 * 3600 * 1000).toISOString(),
-    readingCode: 'READ-000001',
-    openingMeter: 14500.0,
-    closingMeter: 14820.5,
-    openingElectronic: 14500.0,
-    closingElectronic: 14820.5,
-    grossDispensedLiters: 320.5,
-    testingLiters: 5.0,
-    testFuelVolumeLiters: 5.0,
-    netSoldLiters: 315.5,
-    fuelRate: 104.25,
-    fuelRateSnapshot: 104.25,
-    netSalesAmount: 32890.88,
-    readingType: 'REGULAR_SHIFT',
-    isCorrection: false,
-    correctionReason: null,
-    remarks: 'End of morning shift recording',
-    enteredBy: 'Suresh Kumar',
-    recordedBy: 'Suresh Kumar',
-    recordedByName: 'Suresh Kumar',
-    shiftCode: 'SH-001',
-    createdAt: new Date(Date.now() - 12 * 3600 * 1000).toISOString(),
-  },
-  {
-    id: 'READ-000002',
-    stationId: 'st-101',
-    nozzleId: 'NOZZ-000002',
-    fuelCode: 'DIESEL',
-    readingTimestamp: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
-    readingCode: 'READ-000002',
-    openingMeter: 28400.0,
-    closingMeter: 28590.2,
-    openingElectronic: 28400.0,
-    closingElectronic: 28590.2,
-    grossDispensedLiters: 190.2,
-    testingLiters: 0,
-    testFuelVolumeLiters: 0,
-    netSoldLiters: 190.2,
-    fuelRate: 92.8,
-    fuelRateSnapshot: 92.8,
-    netSalesAmount: 17650.56,
-    readingType: 'REGULAR_SHIFT',
-    isCorrection: false,
-    correctionReason: null,
-    remarks: 'Standard shift reading',
-    enteredBy: 'Suresh Kumar',
-    recordedBy: 'Suresh Kumar',
-    recordedByName: 'Suresh Kumar',
-    shiftCode: 'SH-001',
-    createdAt: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
-  },
-];
+export const DEFAULT_METER_READINGS: any[] = [];
 
 export class MockStore {
   stations: any[] = JSON.parse(JSON.stringify(DEFAULT_STATIONS));
@@ -500,26 +92,7 @@ export class MockStore {
   dispensers: any[] = JSON.parse(JSON.stringify(DEFAULT_DISPENSERS));
   nozzles: any[] = JSON.parse(JSON.stringify(DEFAULT_NOZZLES));
   users: any[] = JSON.parse(JSON.stringify(DEFAULT_DEMO_USERS));
-  shifts: any[] = [
-    {
-      id: 'sh-today-01',
-      shiftCode: 'SH-001',
-      stationId: 'st-101',
-      attendantId: 'emp-att-003',
-      attendantName: 'Suresh Kumar',
-      startTime: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
-      endTime: null,
-      status: 'ACTIVE',
-      assignedNozzles: ['NOZZ-000001', 'NOZZ-000002'],
-      totalFuelSoldLiters: 480.5,
-      totalExpectedRevenue: 48500,
-      cashSubmitted: 32000,
-      digitalSubmitted: 16500,
-      creditSubmitted: 0,
-      totalCollected: 48500,
-      shortageExcess: 0,
-    },
-  ];
+  shifts: any[] = [];
   tankLoads: any[] = JSON.parse(JSON.stringify(DEFAULT_TANK_LOADS));
   meterReadings: any[] = JSON.parse(JSON.stringify(DEFAULT_METER_READINGS));
   eodSettlements: any[] = [];
@@ -1577,6 +1150,21 @@ export class MockStore {
       updatedAt: new Date().toISOString(),
     };
   }
-}
+  clearForecourtData() {
+    this.stations = [];
+    this.tanks = [];
+    this.dispensers = [];
+    this.nozzles = [];
+    this.shifts = [];
+    this.meterReadings = [];
+    this.eodSettlements = [];
+    // Preserve admin user and standard fuels
+    this.users = this.users.filter((u: any) => u.role === 'OWNER' || u.username === 'admin');
+    console.log('[MockStore] Forecourt data cleared. Admin and fuel catalog preserved.');
+  }}
 
 export const mockStore = new MockStore();
+
+
+
+

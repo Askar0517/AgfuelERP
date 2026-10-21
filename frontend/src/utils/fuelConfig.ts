@@ -15,6 +15,8 @@ export interface FuelTypeDefinition {
   shortName: string;
   color: string;
   colorName: 'Red' | 'Green' | 'Yellow';
+  displayName: string;
+  colorHex: string;
   densityStd15c: number;
   densityTolerance: number;
   description: string;
@@ -30,6 +32,8 @@ export const STANDARD_FUELS: FuelTypeDefinition[] = [
     code: 'OCTANE_98',
     name: '98 Octane',
     shortName: '98 Oct',
+    displayName: '98 Octane',
+    colorHex: '#DC2626',
     color: '#DC2626',
     colorName: 'Red',
     densityStd15c: 752.0,
@@ -45,6 +49,8 @@ export const STANDARD_FUELS: FuelTypeDefinition[] = [
     code: 'OCTANE_95',
     name: '95 Octane',
     shortName: '95 Oct',
+    displayName: '95 Octane',
+    colorHex: '#16A34A',
     color: '#16A34A',
     colorName: 'Green',
     densityStd15c: 745.0,
@@ -60,6 +66,8 @@ export const STANDARD_FUELS: FuelTypeDefinition[] = [
     code: 'DIESEL',
     name: 'Diesel',
     shortName: 'Diesel',
+    displayName: 'Diesel',
+    colorHex: '#EAB308',
     color: '#EAB308',
     colorName: 'Yellow',
     densityStd15c: 830.0,

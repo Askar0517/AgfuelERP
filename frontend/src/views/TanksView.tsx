@@ -77,6 +77,30 @@ export const TanksView: React.FC<TanksViewProps> = ({
     ? tanks.find((t) => t.id === inspectedTank.id) || inspectedTank
     : null;
 
+  if (stations.length === 0) {
+    return (
+      <div className="space-y-6 pb-12 sm:pb-6 animate-fadeIn">
+        <Breadcrumbs
+          items={[
+            { label: 'Operations' },
+            { label: 'Tanks', isCurrent: true, icon: Droplets },
+          ]}
+        />
+        <div className="rounded-2xl border border-slate-200 dark:border-[#194C47] bg-white dark:bg-[#0D2926] p-12 text-center shadow-xs">
+          <div className="w-14 h-14 rounded-2xl bg-[#12544F]/10 dark:bg-[#12544F]/30 text-[#12544F] dark:text-[#2BA096] flex items-center justify-center mx-auto mb-3">
+            <Droplets className="h-7 w-7" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            No Petrol Bunks Registered
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+            Please register your first bunk station before provisioning underground fuel storage tanks.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-12 sm:pb-6 animate-fadeIn">
       {/* Breadcrumb Navigation & Action Bar */}
@@ -185,7 +209,7 @@ export const TanksView: React.FC<TanksViewProps> = ({
               options={currentTanks.map((t) => ({
                 value: t.id,
                 label: `Tank #${t.tankNumber} (${t.fuelCode})`,
-                description: `Stock: ${t.currentVolumeLiters.toLocaleString()} L · Safe Cap: ${t.safeCapacityLiters.toLocaleString()} L`,
+                description: `Stock: ${t.currentVolumeLiters.toLocaleString()} L \u00B7 Safe Cap: ${t.safeCapacityLiters.toLocaleString()} L`,
                 badge: t.fuelCode,
               }))}
               value={selectedCalcTankId}

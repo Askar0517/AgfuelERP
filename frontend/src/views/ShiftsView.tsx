@@ -14,6 +14,7 @@ import {
 
 interface ShiftsViewProps {
   station: Station;
+  stations?: Station[];
   shifts: Shift[];
   employees: Employee[];
   fuels: FuelProduct[];
@@ -23,6 +24,7 @@ interface ShiftsViewProps {
 
 export const ShiftsView: React.FC<ShiftsViewProps> = ({
   station,
+  stations = [],
   shifts,
   fuels,
   onSettleShift,
@@ -34,6 +36,30 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
 
   const activeShifts = currentShifts.filter((s) => s.status === 'ACTIVE');
   const settledShifts = currentShifts.filter((s) => s.status !== 'ACTIVE');
+
+  if (stations.length === 0) {
+    return (
+      <div className="space-y-6 pb-12 sm:pb-6 animate-fadeIn">
+        <Breadcrumbs
+          items={[
+            { label: 'Management' },
+            { label: 'Shifts', isCurrent: true, icon: Users },
+          ]}
+        />
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-12 text-center shadow-xs">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
+            <Users className="h-7 w-7" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            No Petrol Bunks Registered
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+            Please create a petrol bunk station and assign forecourt staff before opening duty shifts.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12 sm:pb-6">
@@ -83,7 +109,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
                   <div className="min-w-0">
                     <h3 className="text-base font-bold text-slate-900 dark:text-white truncate">{shift.attendantName}</h3>
                     <p className="text-xs text-slate-500 dark:text-gray-400">
-                      Island #{shift.islandNumber} · Shift #{shift.shiftCode}
+                      Island #{shift.islandNumber} \u00B7 Shift #{shift.shiftCode}
                     </p>
                     <p className="text-[11px] text-slate-400 dark:text-gray-400 font-mono">
                       Started: {new Date(shift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

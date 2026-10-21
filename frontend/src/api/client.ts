@@ -14,6 +14,7 @@ import {
   AuthUser,
   AuthResponse,
   RoleDefinition,
+  DailySalesReport,
 } from '../types';
 
 const API_BASE_URL = (

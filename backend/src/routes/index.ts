@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import { SYSTEM_ROLES } from '../utils/rolesAndPermissions.ts';
 import authRoutes from './authRoutes.ts';
 import stationRoutes from './stationRoutes.ts';
@@ -92,6 +92,8 @@ apiRouter.use('/tanks', tankRoutes);
 apiRouter.use('/nozzles', nozzleRoutes);
 apiRouter.use('/shifts', shiftRoutes);
 apiRouter.use('/users', userRoutes);
+apiRouter.use('/employees', userRoutes);
+apiRouter.use(`/employees`, userRoutes);
 apiRouter.use('/fuels', pricingRoutes);
 apiRouter.use('/pricing', pricingRoutes);
 
@@ -126,3 +128,5 @@ apiRouter.use('/upload', uploadRoutes);
 apiRouter.use('/uploads', uploadRoutes);
 
 export default apiRouter;
+
+

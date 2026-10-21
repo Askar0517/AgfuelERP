@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+﻿import crypto from 'crypto';
 import { db } from './index.ts';
 import * as schema from './schema.ts';
 import { eq, desc, and } from 'drizzle-orm';
@@ -38,20 +38,18 @@ export const dbService = {
   async getStations() {
     try {
       const allStations = await db.select().from(schema.stations);
-      if (allStations && allStations.length > 0) {
-        const allNozzles = await db.select().from(schema.nozzles).catch(() => []);
-        const allTanks = await db.select().from(schema.tanks).catch(() => []);
+      const allNozzles = await db.select().from(schema.nozzles).catch(() => []);
+      const allTanks = await db.select().from(schema.tanks).catch(() => []);
 
-        return allStations.map((st) => ({
-          ...st,
-          nozzleCount: allNozzles.filter((n) => n.stationId === st.id).length,
-          tankCount: allTanks.filter((t) => t.stationId === st.id).length,
-        }));
-      }
+      return allStations.map((st) => ({
+        ...st,
+        nozzleCount: allNozzles.filter((n) => n.stationId === st.id).length,
+        tankCount: allTanks.filter((t) => t.stationId === st.id).length,
+      }));
     } catch (err: any) {
       console.warn('[DB getStations offline fallback]:', err.message);
+      return mockStore.getStations();
     }
-    return mockStore.getStations();
   },
 
   async getStation(id: string) {
@@ -539,27 +537,25 @@ export const dbService = {
   async getTanks(stationId?: string) {
     try {
       let allTanks = await db.select().from(schema.tanks);
-      if (allTanks && allTanks.length > 0) {
-        if (stationId) {
-          allTanks = allTanks.filter((t) => t.stationId === stationId);
-        }
-        const allStations = await db.select().from(schema.stations).catch(() => []);
-        const allNozzles = await db.select().from(schema.nozzles).catch(() => []);
-        return allTanks.map((t) => {
-          const st = allStations.find((s) => s.id === t.stationId);
-          const linkedNozzles = allNozzles.filter((n) => n.tankId === t.id || (n.stationId === t.stationId && n.fuelCode === t.fuelCode));
-          return {
-            ...t,
-            stationName: st ? st.name : t.stationId,
-            stationCode: st ? st.code : '',
-            associatedNozzleCount: linkedNozzles.length,
-          };
-        }).sort((a, b) => a.tankNumber - b.tankNumber);
+      if (stationId) {
+        allTanks = allTanks.filter((t) => t.stationId === stationId);
       }
+      const allStations = await db.select().from(schema.stations).catch(() => []);
+      const allNozzles = await db.select().from(schema.nozzles).catch(() => []);
+      return allTanks.map((t) => {
+        const st = allStations.find((s) => s.id === t.stationId);
+        const linkedNozzles = allNozzles.filter((n) => n.tankId === t.id || (n.stationId === t.stationId && n.fuelCode === t.fuelCode));
+        return {
+          ...t,
+          stationName: st ? st.name : t.stationId,
+          stationCode: st ? st.code : '',
+          associatedNozzleCount: linkedNozzles.length,
+        };
+      }).sort((a, b) => a.tankNumber - b.tankNumber);
     } catch (err: any) {
       console.warn('[DB getTanks offline fallback]:', err.message);
+      return mockStore.getTanks(stationId);
     }
-    return mockStore.getTanks(stationId);
   },
 
   async getTank(id: string) {
@@ -996,51 +992,47 @@ export const dbService = {
         ? await db.select().from(schema.nozzles).where(eq(schema.nozzles.stationId, stationId))
         : await db.select().from(schema.nozzles);
 
-      if (disps && disps.length > 0) {
-        return disps.map((d) => ({
-          ...d,
-          nozzles: nozs.filter((n) => n.dispenserId === d.id),
-        }));
-      }
+      return disps.map((d) => ({
+        ...d,
+        nozzles: nozs.filter((n) => n.dispenserId === d.id),
+      }));
     } catch (err: any) {
       console.warn('[DB getDispensers offline fallback]:', err.message);
+      return mockStore.getDispensers(stationId);
     }
-    return mockStore.getDispensers(stationId);
   },
 
   async getNozzles(filter?: { stationId?: string; fuelCode?: string; status?: string }) {
     try {
       let allNozzles = await db.select().from(schema.nozzles);
-      if (allNozzles && allNozzles.length > 0) {
-        if (filter?.stationId) {
-          allNozzles = allNozzles.filter((n) => n.stationId === filter.stationId);
-        }
-        if (filter?.fuelCode) {
-          allNozzles = allNozzles.filter((n) => n.fuelCode === filter.fuelCode);
-        }
-        if (filter?.status) {
-          allNozzles = allNozzles.filter((n) => n.status === filter.status);
-        }
-
-        const stationsList = await db.select().from(schema.stations).catch(() => []);
-        const dispensersList = await db.select().from(schema.dispensers).catch(() => []);
-
-        return allNozzles.map((n) => {
-          const st = stationsList.find((s) => s.id === n.stationId);
-          const dp = dispensersList.find((d) => d.id === n.dispenserId);
-          return {
-            ...n,
-            stationName: st ? st.name : n.stationId,
-            stationCode: st ? st.code : '',
-            dispenserNumber: dp ? dp.dispenserNumber : 1,
-            dispenserBrand: dp ? dp.brand : '',
-          };
-        });
+      if (filter?.stationId) {
+        allNozzles = allNozzles.filter((n) => n.stationId === filter.stationId);
       }
+      if (filter?.fuelCode) {
+        allNozzles = allNozzles.filter((n) => n.fuelCode === filter.fuelCode);
+      }
+      if (filter?.status) {
+        allNozzles = allNozzles.filter((n) => n.status === filter.status);
+      }
+
+      const stationsList = await db.select().from(schema.stations).catch(() => []);
+      const dispensersList = await db.select().from(schema.dispensers).catch(() => []);
+
+      return allNozzles.map((n) => {
+        const st = stationsList.find((s) => s.id === n.stationId);
+        const dp = dispensersList.find((d) => d.id === n.dispenserId);
+        return {
+          ...n,
+          stationName: st ? st.name : n.stationId,
+          stationCode: st ? st.code : '',
+          dispenserNumber: dp ? dp.dispenserNumber : 1,
+          dispenserBrand: dp ? dp.brand : '',
+        };
+      });
     } catch (err: any) {
       console.warn('[DB getNozzles offline fallback]:', err.message);
+      return mockStore.getNozzles(filter);
     }
-    return mockStore.getNozzles(filter);
   },
 
   async getNozzle(id: string) {
@@ -1254,7 +1246,7 @@ export const dbService = {
       // Check if meter readings exist or if dispensed
       const linkedReadings = await db.select().from(schema.manualMeterReadings).where(eq(schema.manualMeterReadings.nozzleId, id));
       const totalizer = Number(nozzle.electronicTotalizer || 0);
-      const initial = Number(nozzle.initialTotalizer || 0);
+      const initial = Number(nozzle.mechanicalTotalizer || 0);
       if (linkedReadings.length > 0 || totalizer > initial) {
         throw new Error(
           `Cannot delete nozzle #${nozzle.nozzleNumber}: Fuel has already been dispensed (${totalizer} L) or meter readings exist. Deactivate nozzle instead to maintain compliance records.`
@@ -2259,3 +2251,5 @@ export const dbService = {
     }
   },
 };
+
+

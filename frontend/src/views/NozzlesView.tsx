@@ -380,6 +380,30 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
   const formSelectedTank = formStationTanks.find((t) => t.id === formData.tankId);
   const formFuel = fuels.find((f) => f.code === formData.fuelCode);
 
+  if (stations.length === 0) {
+    return (
+      <div className="space-y-6 pb-12 sm:pb-6 animate-fadeIn">
+        <Breadcrumbs
+          items={[
+            { label: 'Operations' },
+            { label: 'Nozzles', isCurrent: true, icon: Fuel },
+          ]}
+        />
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-12 text-center shadow-xs">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
+            <Fuel className="h-7 w-7" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+            No Petrol Bunks Registered
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+            Please create your first petrol bunk station before setting up forecourt dispensers and nozzles.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5 animate-fadeIn pb-12">
       {/* View Mode: IN-PAGE FORM */}
@@ -480,7 +504,7 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                       ...formStationTanks.map((t) => ({
                         value: t.id,
                         label: `Tank #${t.tankNumber}: ${t.name || t.id}`,
-                        description: `Grade: ${t.fuelCode} · Cap: ${t.capacityLiters.toLocaleString()} L`,
+                        description: `Grade: ${t.fuelCode} \u00B7 Cap: ${t.capacityLiters.toLocaleString()} L`,
                         badge: t.fuelCode,
                       })),
                     ]}
@@ -498,7 +522,7 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                 {/* 3. Derived Fuel Grade (or Selectable if direct feed) */}
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 text-xs">
-                    Fuel Product Grade {formSelectedTank ? <span className="text-emerald-600">(Authoritative · Locked to Tank)</span> : <span className="text-amber-600">(Select Grade)</span>}
+                    Fuel Product Grade {formSelectedTank ? <span className="text-emerald-600">(Authoritative \u00B7 Locked to Tank)</span> : <span className="text-amber-600">(Select Grade)</span>}
                   </label>
                   {formSelectedTank ? (
                     <div className="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs">
@@ -645,7 +669,7 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                 {/* Initial Totalizer */}
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
-                    Cumulative Totalizer Reading (Liters) <span className="text-emerald-600 font-normal">(Locked · Initial Register)</span>
+                    Cumulative Totalizer Reading (Liters) <span className="text-emerald-600 font-normal">(Locked \u00B7 Initial Register)</span>
                   </label>
                   <input
                     type="number"
@@ -857,7 +881,7 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                                   {nozzle.name || `Nozzle ${nozzle.nozzleNumber}`}
                                 </span>
                                 <span className="text-[10px] text-slate-400 font-mono block">
-                                  {nozzle.id} · {nozzle.deviceIdentifier || `NZ-${nozzle.nozzleNumber}`}
+                                  {nozzle.id} \u00B7 {nozzle.deviceIdentifier || `NZ-${nozzle.nozzleNumber}`}
                                 </span>
                               </div>
                             </div>
@@ -1210,7 +1234,7 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                   Cannot Delete Nozzle #{blockedNozzleDelete.nozzle.nozzleNumber}
                 </h3>
                 <span className="text-xs text-slate-500 font-mono">
-                  {blockedNozzleDelete.nozzle.fuelCode} · Totalizer: {blockedNozzleDelete.nozzle.electronicTotalizer.toLocaleString()} L
+                  {blockedNozzleDelete.nozzle.fuelCode} \u00B7 Totalizer: {blockedNozzleDelete.nozzle.electronicTotalizer.toLocaleString()} L
                 </span>
               </div>
             </div>
@@ -1267,7 +1291,7 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                   Delete Nozzle #{deletingNozzle.nozzleNumber}?
                 </h3>
                 <span className="text-xs text-slate-500 font-mono">
-                  {deletingNozzle.fuelCode} · Totalizer: 0.00 L
+                  {deletingNozzle.fuelCode} \u00B7 Totalizer: 0.00 L
                 </span>
               </div>
             </div>
@@ -1303,7 +1327,7 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
           entityType="NOZZLE"
           entityId={qrNozzle.id}
           entityName={qrNozzle.name || `Nozzle #${qrNozzle.nozzleNumber}`}
-          subtitle={`${stations.find((s) => s.id === qrNozzle.stationId)?.name || 'Bunk'} · ${getFuelDefinition(qrNozzle.fuelCode).name}`}
+          subtitle={`${stations.find((s) => s.id === qrNozzle.stationId)?.name || 'Bunk'} \u00B7 ${getFuelDefinition(qrNozzle.fuelCode).name}`}
           parentBunkName={stations.find((s) => s.id === qrNozzle.stationId)?.name}
           fuelCode={qrNozzle.fuelCode}
           fuelColor={getFuelDefinition(qrNozzle.fuelCode).color}

@@ -361,6 +361,7 @@ export interface AuthUser {
   shiftSchedule?: string;
   lastLogin?: string;
   avatarUrl?: string;
+  assignedIsland?: number;
 }
 
 export interface AuthResponse {

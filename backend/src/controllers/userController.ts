@@ -1,8 +1,8 @@
-import { Request, Response } from 'express';
+﻿import { Request, Response } from 'express';
 import { dbService } from '../db/service.ts';
 import { mockStore, hashPassword } from '../db/mockStore.ts';
 import { activeSessions } from '../middleware/auth.ts';
-import { sendInitialCredentials } from '../utils/mailHelper.ts';
+import { sendInitialCredentialsMail } from '../utils/mailHelper.ts';
 
 let ownerProfileAvatar: string | null = null;
 
@@ -67,15 +67,15 @@ export const userController = {
         }
 
         try {
-          const mailResult = await sendInitialCredentials({
-            user: {
-              name: newUser.name,
-              email: newUser.email,
-              username: newUser.username,
-              role: newUser.role,
-              stationName,
-            },
-            temporaryPassword: tempPassword,
+          const mailResult = await sendInitialCredentialsMail({
+        user: {
+          name: newUser.name,
+          email: newUser.email,
+          username: newUser.username,
+          role: newUser.role,
+        },
+        stationName,
+        temporaryPassword: tempPassword,
             loginUrl: req.body.loginUrl,
           });
           emailDispatched = mailResult.success;
@@ -103,7 +103,7 @@ export const userController = {
       // Generate or use provided temporary password
       const tempPassword = req.body.password || `PetroPulse@${Math.floor(1000 + Math.random() * 9000)}`;
       const passwordHash = hashPassword(tempPassword);
-      await dbService.updateUser(user.id, { passwordHash });
+      await dbService.updateUser(user.id, { passwordHash } as any);
 
       let stationName: string | undefined;
       if (user.stationId) {
@@ -111,14 +111,14 @@ export const userController = {
         stationName = station?.name;
       }
 
-      const mailResult = await sendInitialCredentials({
+      const mailResult = await sendInitialCredentialsMail({
         user: {
           name: user.name,
           email: user.email,
           username: user.username,
           role: user.role,
-          stationName,
         },
+        stationName,
         temporaryPassword: tempPassword,
         loginUrl: req.body.loginUrl,
       });
@@ -394,3 +394,7 @@ export const userController = {
     }
   },
 };
+
+
+
+

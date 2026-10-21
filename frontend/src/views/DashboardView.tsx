@@ -18,6 +18,8 @@ import {
   Banknote,
   ShieldCheck,
   ChevronRight,
+  ArrowRight,
+  Plus,
   Calculator,
   Layers,
   Ruler,
@@ -27,6 +29,7 @@ import {
   Globe,
 } from 'lucide-react';
 import { SelectDropdown } from '../components/common/SelectDropdown';
+import { DashboardZeroState } from '../components/dashboard/DashboardZeroState';
 
 interface DashboardViewProps {
   station: Station;
@@ -83,14 +86,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     code: 'BUNK-000001',
     location: 'Connaught Place Outer Ring, New Delhi',
     managerName: 'Rajesh Sharma',
+    phone: '',
     timezone: 'Asia/Kolkata',
     status: 'ONLINE',
     operatingHours: '24_HOURS',
     eodCloseTime: '23:59',
   };
 
-  const availableStations = (stations && stations.length > 0 ? stations : [station]).filter(
-    (s): s is Station => Boolean(s && s.id)
+  const availableStations = (stations || []).filter(
+    (s): s is Station => Boolean(s && s.id && s.id !== 'fallback' && s.id !== 'st-101')
   );
 
   const permittedStations = availableStations.filter((s) => {
@@ -101,12 +105,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return s.id === currentUser.stationId;
   });
 
-  const isAllBunks = selectedBunkId === 'ALL' && isMultiBunkAuthorized;
+  if (permittedStations.length === 0) {
+    return (
+      <DashboardZeroState
+        fuels={fuels}
+        currentUser={currentUser}
+        onNavigate={onNavigate}
+      />
+    );
+  }
+
+  const effectiveBunkId =
+    selectedBunkId === 'ALL' && isMultiBunkAuthorized
+      ? 'ALL'
+      : permittedStations.some((s) => s.id === selectedBunkId)
+      ? selectedBunkId
+      : permittedStations[0].id;
+
+  const isAllBunks = effectiveBunkId === 'ALL' && isMultiBunkAuthorized;
   const activeStation =
-    permittedStations.find((s) => s.id === selectedBunkId) ||
-    permittedStations[0] ||
-    station ||
-    fallbackStation;
+    permittedStations.find((s) => s.id === effectiveBunkId) ||
+    permittedStations[0];
 
   const currentTanks = tanks.filter((t) =>
     isAllBunks ? permittedStations.some((ps) => ps.id === t.stationId) : t.stationId === activeStation.id
@@ -157,9 +176,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="font-semibold text-[#12544F] dark:text-[#2BA096] uppercase tracking-wider text-[11px]">
               Live Forecourt Operations
             </span>
-            <span aria-hidden="true">·</span>
+            <span aria-hidden="true">\u00B7</span>
             <span>{todayFormatted}</span>
-            <span aria-hidden="true">·</span>
+            <span aria-hidden="true">\u00B7</span>
             <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
               {isAllBunks ? 'ALL-NETWORK' : activeStation?.code || 'BUNK-000001'}
             </span>
@@ -173,9 +192,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             ) : (
               <>
                 {activeStation?.location || 'Central Forecourt'}
-                <span className="mx-1.5" aria-hidden="true">·</span>
+                <span className="mx-1.5" aria-hidden="true">\u00B7</span>
                 Manager: <span className="font-medium text-slate-700 dark:text-slate-300">{activeStation?.managerName || 'Unassigned'}</span>
-                <span className="mx-1.5" aria-hidden="true">·</span>
+                <span className="mx-1.5" aria-hidden="true">\u00B7</span>
                 Timezone: <span className="font-mono text-[#12544F] dark:text-[#2BA096]">{activeStation?.timezone || 'Asia/Kolkata'}</span>
               </>
             )}
@@ -206,7 +225,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   badge: st.code,
                 })),
               ]}
-              value={selectedBunkId}
+              value={effectiveBunkId}
               onChange={(val) => {
                 setSelectedBunkId(val);
                 if (val !== 'ALL' && onSelectStation) {
@@ -264,7 +283,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
           <div className="mt-2 font-mono text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight tabular-nums truncate">
-            ₹{totalRevenueToday.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            \u20B9{totalRevenueToday.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
           <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             <span className="font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
@@ -284,10 +303,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
           <div className="mt-2 font-mono text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight tabular-nums truncate">
-            ₹{(totalCashCollected + totalDigitalCollected).toLocaleString()}
+            \u20B9{(totalCashCollected + totalDigitalCollected).toLocaleString()}
           </div>
           <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
-            Cash: ₹{totalCashCollected.toLocaleString()} · POS: ₹{totalDigitalCollected.toLocaleString()}
+            Cash: \u20B9{totalCashCollected.toLocaleString()} &bull; POS: \u20B9{totalDigitalCollected.toLocaleString()}
           </div>
         </div>
 
@@ -325,7 +344,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {activeShifts.length} Active Shifts
           </div>
           <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {currentDispensers.length} Dispensers Online · {currentTanks.length} Tanks
+            {currentDispensers.length === 0 && currentTanks.length === 0 ? (
+              <span className="text-slate-400">No forecourt hardware provisioned</span>
+            ) : (
+              <span>{currentDispensers.length} Dispensers Online &bull; {currentTanks.length} Tanks</span>
+            )}
           </div>
         </div>
       </div>
@@ -390,7 +413,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onClick={() => onNavigate('tanks')}
             className="text-emerald-700 dark:text-emerald-400 hover:underline font-semibold shrink-0 ml-2"
           >
-            Review Tanks →
+            Review Tanks &rarr;
           </button>
         </div>
       )}
@@ -435,7 +458,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <span className="font-semibold text-slate-900 dark:text-white truncate">
                         {shift.attendantName}
                       </span>
-                      <span className="text-slate-400" aria-hidden="true">·</span>
+                      <span className="text-slate-400" aria-hidden="true">\u00B7</span>
                       <span className="font-mono text-slate-600 dark:text-slate-400 font-medium">
                         Island #{shift.islandNumber}
                       </span>
@@ -451,7 +474,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
                     <div className="mt-1 text-slate-500 dark:text-slate-400 text-[11px] font-mono">
                       Shift: {shift.shiftCode}
-                      <span className="mx-1" aria-hidden="true">·</span>
+                      <span className="mx-1" aria-hidden="true">\u00B7</span>
                       Started: {new Date(shift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
@@ -460,7 +483,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <div>
                       <span className="text-[10px] text-slate-400 block font-sans">Expected Sales</span>
                       <span className="font-bold text-slate-900 dark:text-white tabular-nums">
-                        ₹{shift.totalExpectedRevenue.toLocaleString()}
+                        \u20B9{shift.totalExpectedRevenue.toLocaleString()}
                       </span>
                     </div>
                     <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums mt-0.5">
@@ -518,7 +541,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <span className="font-bold text-slate-900 dark:text-white">
                           Tank #{tank.tankNumber}
                         </span>
-                        <span className="text-slate-400" aria-hidden="true">·</span>
+                        <span className="text-slate-400" aria-hidden="true">\u00B7</span>
                         <span className="font-semibold text-slate-700 dark:text-slate-300">
                           {fuel?.name || tank.fuelCode}
                         </span>
@@ -588,7 +611,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <div>
                       <span className="font-bold text-slate-900 dark:text-white text-xs">{load.tankerNumber}</span>
                       <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-sans">
-                        Inv #{load.invoiceNo} · <span className="font-semibold text-slate-700 dark:text-slate-300">{load.fuelCode}</span>
+                        Inv #{load.invoiceNo} \u00B7 <span className="font-semibold text-slate-700 dark:text-slate-300">{load.fuelCode}</span>
                       </span>
                     </div>
                     <div className="text-right">

@@ -86,7 +86,7 @@ export const DbSyncModal: React.FC<DbSyncModalProps> = ({ isOpen, onClose }) => 
   const isPostgres = data?.connection.connected;
 
   return (
-    <ModalPortal>
+    <ModalPortal isOpen={isOpen} onClose={onClose}>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
         <div
           className="relative w-full max-w-2xl bg-white dark:bg-[#0D2926] border border-slate-200 dark:border-[#194C47] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150"
