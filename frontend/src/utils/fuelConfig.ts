@@ -146,3 +146,57 @@ export const FUEL_SELECT_OPTIONS = STANDARD_FUELS.map((f) => ({
       ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
       : 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800',
 }));
+
+/**
+ * Cleans any legacy, duplicate, or auto-generated fuel codes/tags embedded in parentheses inside a nozzle name.
+ * e.g.:
+ * "Nozzle #1 (OCTANE_98)" -> "Nozzle #1"
+ * "Nozzle #2 (OCTANE_98) (98 Oct)" -> "Nozzle #2"
+ * "Nozzle #3 (95 Oct)" -> "Nozzle #3"
+ * "Nozzle #5 (Diesel)" -> "Nozzle #5"
+ * "Nozzle #1" -> "Nozzle #1"
+ */
+export function formatNozzleCleanName(rawName?: string | null, nozzleNumber?: number | string): string {
+  if (!rawName || !rawName.trim()) {
+    return nozzleNumber !== undefined && nozzleNumber !== null ? `Nozzle #${nozzleNumber}` : 'Nozzle';
+  }
+
+  // Strip trailing or embedded parenthetical fuel codes or descriptors
+  // Matches (OCTANE_98), (OCTANE_95), (DIESEL), (PETROL), (PREMIUM), (98 Oct), (95 Oct), (Fuel), etc.
+  let cleaned = rawName
+    .replace(/\s*\((?:OCTANE[_\s-]?\d+|DIESEL|PETROL|PREMIUM|\d+\s*OCT(?:ANE)?|FUEL)\)\s*/gi, ' ')
+    .trim();
+
+  // Strip any trailing parentheses that hold a fuel code or single fuel name
+  cleaned = cleaned.replace(/\s*\([^)]*\)\s*$/g, (match) => {
+    const inside = match.replace(/[()]/g, '').trim().toUpperCase();
+    if (['OCTANE_98', 'OCTANE_95', 'DIESEL', 'PETROL', 'PREMIUM', 'FUEL', '98 OCT', '95 OCT'].includes(inside)) {
+      return '';
+    }
+    return match;
+  }).trim();
+
+  // Clean double spaces
+  cleaned = cleaned.replace(/\s{2,}/g, ' ');
+
+  if (!cleaned) {
+    return nozzleNumber !== undefined && nozzleNumber !== null ? `Nozzle #${nozzleNumber}` : 'Nozzle';
+  }
+
+  return cleaned;
+}
+
+/**
+ * Returns the badge style class based on fuel code.
+ */
+export function getFuelBadgeClass(fuelCode?: string | null): string {
+  const norm = normalizeFuelCode(fuelCode);
+  if (norm === 'OCTANE_98') {
+    return 'bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800';
+  }
+  if (norm === 'OCTANE_95') {
+    return 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800';
+  }
+  return 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800';
+}
+

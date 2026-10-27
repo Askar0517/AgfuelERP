@@ -7,7 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "tsx src/server.ts",
-    "test": "tsx --test tests/health.test.mjs tests/codeGenAndValidation.test.mjs tests/api.test.mjs tests/logger.test.mjs tests/bunk.test.mjs tests/dbSync.test.mjs tests/mailHelper.test.mjs",
+    "test": "tsx --test tests/health.test.mjs tests/codeGenAndValidation.test.mjs tests/api.test.mjs tests/logger.test.mjs tests/bunk.test.mjs tests/dbSync.test.mjs tests/mailHelper.test.mjs tests/pricing.test.mjs",
     "migrate": "drizzle-kit push --config=drizzle.config.ts",
     "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
     "db:seed": "tsx src/db/seed.ts",

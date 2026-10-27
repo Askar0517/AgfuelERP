@@ -184,6 +184,8 @@ export function validateUserForm(data: {
   role: string;
   stationId: string;
   phone?: string;
+  phonePrefix?: string;
+  pin?: string;
 }): ValidationResult {
   const errors: Record<string, string> = {};
 
@@ -194,15 +196,46 @@ export function validateUserForm(data: {
     errors.name = 'Name must be at least 2 characters.';
   }
 
-  // Email or Username (at least one required, validate email format if provided)
-  const hasEmail = Boolean(data.email && data.email.trim());
-  const hasUsername = Boolean(data.username && data.username.trim());
+  // Email is OPTIONAL. If provided, validate format:
+  if (data.email && data.email.trim()) {
+    if (!EMAIL_REGEX.test(data.email.trim())) {
+      errors.email = 'Please provide a valid email format (e.g. user@domain.com).';
+    }
+  }
 
-  if (!hasEmail && !hasUsername) {
-    errors.email = 'Either email address or username is required.';
-  } else if (hasEmail && !EMAIL_REGEX.test(data.email!.trim())) {
-    errors.email = 'Please provide a valid email format (e.g. user@domain.com).';
-  } else if (hasUsername && data.username!.trim().length < 3) {
+  // Contact Phone is MANDATORY for all users!
+  const prefix = data.phonePrefix || '+91';
+  const cleanPhone = (data.phone || '').trim().replace(/\D/g, '');
+  if (!data.phone || !cleanPhone) {
+    errors.phone = 'Mobile contact number is mandatory for all forecourt staff.';
+  } else {
+    // Length validation based on country prefix
+    if (prefix === '+91') {
+      if (cleanPhone.length !== 10) {
+        errors.phone = 'Indian mobile number must be exactly 10 digits.';
+      }
+    } else if (prefix === '+1' || prefix === '+44') {
+      if (cleanPhone.length !== 10) {
+        errors.phone = 'Mobile number must be 10 digits.';
+      }
+    } else if (prefix === '+971' || prefix === '+966') {
+      if (cleanPhone.length !== 9) {
+        errors.phone = 'Mobile number must be 9 digits.';
+      }
+    } else if (cleanPhone.length < 7 || cleanPhone.length > 15) {
+      errors.phone = 'Mobile number must be between 7 and 15 digits.';
+    }
+  }
+
+  // Security PIN (if provided, must be 4 to 6 numeric digits)
+  if (data.pin && data.pin.trim()) {
+    if (!/^\d{4,6}$/.test(data.pin.trim())) {
+      errors.pin = 'PIN must be a 4 to 6 digit numeric code (e.g. 1234).';
+    }
+  }
+
+  // Username validation if provided
+  if (data.username && data.username.trim().length > 0 && data.username.trim().length < 3) {
     errors.username = 'Username must be at least 3 characters.';
   }
 
@@ -214,14 +247,6 @@ export function validateUserForm(data: {
   // Station ID (required for all non-superadmin users)
   if (data.role !== 'OWNER' && (!data.stationId || !data.stationId.trim())) {
     errors.stationId = 'Assigned bunk is required for this role.';
-  }
-
-  // Phone (optional)
-  if (data.phone && data.phone.trim()) {
-    const cleanPhone = data.phone.trim().replace(/\s+/g, '');
-    if (!PHONE_REGEX.test(cleanPhone)) {
-      errors.phone = 'Please enter a valid phone number.';
-    }
   }
 
   return {

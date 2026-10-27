@@ -15,6 +15,7 @@ import {
   Check,
 } from 'lucide-react';
 import { ShiftSettleModal } from './ShiftSettleModal';
+import { ImageUploadInput } from './common/ImageUploadInput';
 
 interface AttendantMobileViewProps {
   shifts: Shift[];
@@ -65,7 +66,8 @@ export const AttendantMobileView: React.FC<AttendantMobileViewProps> = ({
   // Meter Readings State
   const [openingMeter, setOpeningMeter] = useState<number>(0);
   const [closingMeter, setClosingMeter] = useState<number>(100);
-  const [testingLiters, setTestingLiters] = useState<number>(5.0);
+  const [testingLiters, setTestingLiters] = useState<number>(0);
+  const [meterPhotoUrl, setMeterPhotoUrl] = useState<string | null>(null);
   const [correctionReason, setCorrectionReason] = useState<string>('');
 
   // Cash Denominations
@@ -140,6 +142,11 @@ export const AttendantMobileView: React.FC<AttendantMobileViewProps> = ({
       return;
     }
 
+    if (!meterPhotoUrl || !meterPhotoUrl.trim()) {
+      setErrorMsg('Meter totalizer photograph is strictly mandatory for legal metrology and audit compliance.');
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -155,10 +162,13 @@ export const AttendantMobileView: React.FC<AttendantMobileViewProps> = ({
         correctionReason: isRolloverOrReset ? correctionReason.trim() : undefined,
         enteredBy: activeShift?.attendantName || 'Forecourt Attendant',
         shiftCode: activeShift?.shiftCode || 'MOBILE-SHIFT',
+        meterPhotoUrl: meterPhotoUrl.trim(),
       });
       setSuccessMsg(`Logged ${netSoldLiters}L sold (₹${calculatedSales.toLocaleString(undefined, { minimumFractionDigits: 2 })})!`);
       setOpeningMeter(closingMeter);
       setClosingMeter(Number((closingMeter + 75.0).toFixed(1)));
+      setMeterPhotoUrl(null);
+      setTestingLiters(0);
       setCorrectionReason('');
       setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err: any) {
@@ -333,14 +343,35 @@ export const AttendantMobileView: React.FC<AttendantMobileViewProps> = ({
           </span>
         </div>
 
+        {/* Dispenser Physical Meter Photo Evidence (Mandatory) */}
+        <div className="rounded-xl border border-dashed border-amber-300 dark:border-amber-700/60 bg-amber-50/40 dark:bg-amber-950/20 p-2.5">
+          <ImageUploadInput
+            label="Meter Totalizer Photo (Mandatory): *"
+            helperText="Capture or upload photo of the totalizer counter"
+            category="reading"
+            value={meterPhotoUrl}
+            onChange={(url) => {
+              setMeterPhotoUrl(url);
+              if (url && errorMsg?.includes('photograph')) setErrorMsg(null);
+            }}
+            compact
+          />
+        </div>
+
         <button
           type="button"
           onClick={handleSubmitReading}
-          disabled={isSubmitting || !selectedNozzle || (isRolloverOrReset && !correctionReason.trim())}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#12544F] hover:bg-[#0E433F] active:scale-95 py-2.5 text-xs font-semibold text-white shadow-sm transition disabled:opacity-50 cursor-pointer"
+          disabled={isSubmitting || !selectedNozzle || !meterPhotoUrl || (isRolloverOrReset && !correctionReason.trim())}
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#12544F] hover:bg-[#0E433F] active:scale-95 py-2.5 text-xs font-semibold text-white shadow-sm transition disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           <Save className="h-4 w-4" />
-          <span>{isSubmitting ? 'Recording to Forecourt Ledger...' : 'Submit Nozzle Reading'}</span>
+          <span>
+            {isSubmitting
+              ? 'Recording to Forecourt Ledger...'
+              : !meterPhotoUrl
+              ? 'Attach Meter Photo to Submit *'
+              : 'Submit Nozzle Reading'}
+          </span>
         </button>
       </div>
 

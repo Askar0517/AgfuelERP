@@ -6,6 +6,13 @@ export const stationController = {
   getStations: async (req: Request, res: Response) => {
     try {
       let stations = await dbService.getStations();
+      const user = (req as any).user;
+      if (user && user.role !== 'OWNER' && user.role !== 'AUDITOR') {
+        const userRec = user.id ? await dbService.getUser(user.id).catch(() => null) : null;
+        if (userRec?.stationId) {
+          stations = stations.filter((s) => s.id === userRec.stationId);
+        }
+      }
       const { status, search } = req.query;
 
       if (status && typeof status === 'string') {
@@ -38,7 +45,7 @@ export const stationController = {
 
   getNextBunkCode: async (_req: Request, res: Response) => {
     try {
-      const nextCode = await dbService.getNextBunkCode();
+      const nextCode = await dbService.peekNextBunkCode();
       res.json({ code: nextCode, nextCode });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -47,6 +54,13 @@ export const stationController = {
 
   getStation: async (req: Request, res: Response) => {
     try {
+      const user = (req as any).user;
+      if (user && user.role !== 'OWNER' && user.role !== 'AUDITOR') {
+        const userRec = user.id ? await dbService.getUser(user.id).catch(() => null) : null;
+        if (userRec?.stationId && userRec.stationId !== req.params.id) {
+          return res.status(403).json({ error: 'Access denied: You are not authorized to view this station.' });
+        }
+      }
       const station = await dbService.getStation(req.params.id);
       if (!station) return res.status(404).json({ error: 'Bunk not found' });
       res.json(station);

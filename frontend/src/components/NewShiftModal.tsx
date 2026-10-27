@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Dispenser, Employee, FuelProduct, Station, Shift } from '../types';
-import { X, UserCheck, CheckCircle2, AlertTriangle, Coins, ShieldAlert } from 'lucide-react';
+import { Dispenser, Employee, FuelProduct, Station, Shift, Nozzle } from '../types';
+import { X, UserCheck, CheckCircle2, AlertTriangle, Coins, ShieldAlert, Plus } from 'lucide-react';
 import { SelectDropdown } from './common/SelectDropdown';
 import { ModalPortal } from './common/ModalPortal';
 import { getBunkCurrency } from '../utils/currency';
+import { formatNozzleCleanName } from '../utils/fuelConfig';
 
 interface NewShiftModalProps {
   station: Station;
   employees: Employee[];
   dispensers: Dispenser[];
+  nozzles?: Nozzle[];
   fuels: FuelProduct[];
   shifts?: Shift[];
   isOpen: boolean;
@@ -20,13 +22,39 @@ export const NewShiftModal: React.FC<NewShiftModalProps> = ({
   station,
   employees,
   dispensers,
+  nozzles = [],
   fuels,
   shifts = [],
   isOpen,
   onClose,
   onSubmit,
 }) => {
-  const attendants = employees.filter((e) => e.stationId === station.id && e.role === 'ATTENDANT');
+  // Business Rule: Identify eligible forecourt attendants and staff
+  const isAssignedToStation = (e: Employee) => {
+    if (e.stationId === station.id) return true;
+    if (Array.isArray(e.assignedBunks) && e.assignedBunks.includes(station.id)) return true;
+    if (typeof e.assignedBunks === 'string') {
+      try {
+        const parsed = JSON.parse(e.assignedBunks);
+        if (Array.isArray(parsed) && parsed.includes(station.id)) return true;
+      } catch {
+        if (e.assignedBunks.includes(station.id)) return true;
+      }
+    }
+    // Global staff or unassigned station (e.g. administrator/manager/roving staff)
+    if (!e.stationId && (!e.assignedBunks || e.assignedBunks === '[]' || (Array.isArray(e.assignedBunks) && e.assignedBunks.length === 0))) {
+      return true;
+    }
+    return false;
+  };
+
+  const stationStaff = employees.filter((e) => isAssignedToStation(e) && e.status !== 'INACTIVE');
+  const eligibleAttendants = (stationStaff.length > 0 ? stationStaff : employees.filter((e) => e.status !== 'INACTIVE'))
+    .sort((a, b) => {
+      const score = (role: string) => (role === 'ATTENDANT' ? 1 : role === 'OPERATOR' ? 2 : role === 'CASHIER' ? 3 : 4);
+      return score(a.role) - score(b.role) || a.name.localeCompare(b.name);
+    });
+
   const stationDispensers = dispensers.filter((d) => d.stationId === station.id);
   const currency = getBunkCurrency(station);
 
@@ -41,13 +69,17 @@ export const NewShiftModal: React.FC<NewShiftModalProps> = ({
     activeStationShifts.map((s) => [s.islandNumber, s])
   );
 
+  // Dynamic Island detection from dispensers
+  const detectedIslands = Array.from(new Set(stationDispensers.map((d) => d.islandNumber).filter(Boolean))).sort((a, b) => a - b);
+  const availableIslands = detectedIslands.length > 0 ? detectedIslands : [1, 2];
+
   // Pick first available attendant without an active shift
-  const firstAvailableAttendant = attendants.find((a) => !activeAttendantMap.has(a.id));
+  const firstAvailableAttendant = eligibleAttendants.find((a) => !activeAttendantMap.has(a.id));
 
   const [selectedAttendantId, setSelectedAttendantId] = useState(
-    firstAvailableAttendant?.id || attendants[0]?.id || ''
+    firstAvailableAttendant?.id || eligibleAttendants[0]?.id || ''
   );
-  const [selectedIsland, setSelectedIsland] = useState<number>(1);
+  const [selectedIsland, setSelectedIsland] = useState<number>(availableIslands[0] || 1);
   const [openingCashFloat, setOpeningCashFloat] = useState<string>('0');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -56,13 +88,15 @@ export const NewShiftModal: React.FC<NewShiftModalProps> = ({
     if (isOpen) {
       if (firstAvailableAttendant) {
         setSelectedAttendantId(firstAvailableAttendant.id);
+      } else if (eligibleAttendants.length > 0) {
+        setSelectedAttendantId(eligibleAttendants[0].id);
       }
       // Pick first unoccupied island if possible
-      const freeIsland = [1, 2].find((num) => !activeIslandMap.has(num)) || 1;
+      const freeIsland = availableIslands.find((num) => !activeIslandMap.has(num)) || availableIslands[0] || 1;
       setSelectedIsland(freeIsland);
       setOpeningCashFloat('0');
     }
-  }, [isOpen, station.id]);
+  }, [isOpen, station.id, eligibleAttendants.length]);
 
   // Close on Escape key
   useEffect(() => {
@@ -77,7 +111,12 @@ export const NewShiftModal: React.FC<NewShiftModalProps> = ({
 
   // Get nozzles for selected island
   const islandDispensers = stationDispensers.filter((d) => d.islandNumber === selectedIsland);
-  const islandNozzles = islandDispensers.flatMap((d) => d.nozzles);
+  let islandNozzles = islandDispensers.flatMap((d) => d.nozzles || []);
+  if (islandNozzles.length === 0 && nozzles.length > 0) {
+    islandNozzles = nozzles.filter(
+      (n) => n.stationId === station.id && (islandDispensers.length === 0 || islandDispensers.some((d) => d.id === n.dispenserId))
+    );
+  }
 
   // Conflicts check based on shift business rules
   const attendantConflictShift = activeAttendantMap.get(selectedAttendantId);
@@ -86,23 +125,26 @@ export const NewShiftModal: React.FC<NewShiftModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (hasConflict) return;
+    if (hasConflict || !selectedAttendantId) return;
 
     setIsSubmitting(true);
     try {
       const initialReadings = islandNozzles.map((n) => ({
         nozzleId: n.id,
         fuelCode: n.fuelCode,
-        startMeter: n.electronicTotalizer,
-        openingElectronic: n.electronicTotalizer,
-        endMeter: n.electronicTotalizer,
+        startMeter: n.electronicTotalizer || 0,
+        openingElectronic: n.electronicTotalizer || 0,
+        endMeter: n.electronicTotalizer || 0,
         testingLiters: 0,
         rate: fuels.find((f) => f.code === n.fuelCode)?.ratePerLiter || 100,
       }));
 
+      const chosenStaff = eligibleAttendants.find((e) => e.id === selectedAttendantId);
+
       await onSubmit({
         stationId: station.id,
-        attendantId: selectedAttendantId || 'emp-default',
+        attendantId: selectedAttendantId,
+        attendantName: chosenStaff?.name || 'Forecourt Attendant',
         islandNumber: selectedIsland,
         openingCashFloat: parseFloat(openingCashFloat) || 0,
         shiftCode: `SHF-${Date.now().toString().slice(-4)}`,
@@ -177,24 +219,32 @@ export const NewShiftModal: React.FC<NewShiftModalProps> = ({
           {/* Attendant Selector */}
           <div>
             <SelectDropdown
-              label="Assign Forecourt Attendant"
+              label="Assign Forecourt Staff / Attendant"
               required
-              placeholder="Select an attendant..."
-              options={attendants.map((att) => {
+              placeholder="Select an attendant or staff member..."
+              options={eligibleAttendants.map((att) => {
                 const busyShift = activeAttendantMap.get(att.id);
                 return {
                   value: att.id,
-                  label: `${att.name} ${busyShift ? '(Active on Island ' + busyShift.islandNumber + ')' : ''}`,
+                  label: `${att.name} (${att.role})`,
                   description: busyShift
-                    ? `Currently active on Shift #${busyShift.shiftCode}`
-                    : `${att.shiftSchedule} Shift · Island ${att.assignedIsland || 'Any'}`,
-                  badge: busyShift ? 'BUSY' : att.shiftSchedule,
+                    ? `Currently active on Island #${busyShift.islandNumber} (Shift #${busyShift.shiftCode})`
+                    : `${att.shiftSchedule || 'General'} Shift · ${att.stationId === station.id ? 'Assigned to Bunk' : 'All-Bunks Staff'}`,
+                  badge: busyShift ? 'BUSY' : att.role,
+                  badgeClass: busyShift
+                    ? 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800'
+                    : 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800',
                 };
               })}
               value={selectedAttendantId}
               onChange={(val) => setSelectedAttendantId(val)}
-              searchable={attendants.length > 4}
+              searchable={eligibleAttendants.length > 4}
             />
+            {eligibleAttendants.length === 0 && (
+              <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                No active staff found for this bunk. You can create or assign attendants in Management &gt; Users.
+              </p>
+            )}
           </div>
 
           {/* Island Selector */}
@@ -203,7 +253,7 @@ export const NewShiftModal: React.FC<NewShiftModalProps> = ({
               Select Operating Forecourt Island:
             </label>
             <div className="mt-1.5 grid grid-cols-2 gap-3">
-              {[1, 2].map((islandNum) => {
+              {availableIslands.map((islandNum) => {
                 const activeShift = activeIslandMap.get(islandNum);
                 const isSelected = selectedIsland === islandNum;
                 return (
@@ -282,10 +332,10 @@ export const NewShiftModal: React.FC<NewShiftModalProps> = ({
                     className="flex items-center justify-between py-1 border-b border-slate-200/60 dark:border-gray-900 last:border-0"
                   >
                     <span className="text-slate-600 dark:text-gray-400">
-                      {noz.name || `Nozzle #${noz.nozzleNumber}`} ({noz.fuelCode}):
+                      {formatNozzleCleanName(noz.name, noz.nozzleNumber)} ({noz.fuelCode}):
                     </span>
                     <span className="font-bold text-slate-900 dark:text-white tabular-nums">
-                      {noz.electronicTotalizer.toFixed(2)} L
+                      {(noz.electronicTotalizer || 0).toFixed(2)} L
                     </span>
                   </div>
                 ))}

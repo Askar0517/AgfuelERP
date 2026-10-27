@@ -19,10 +19,10 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     { id: 'shifts', label: 'Shifts', icon: Layers },
   ];
 
-  const isMoreActive = ['bunks', 'nozzles', 'users', 'scheduler', 'dsr', 'efficiency', 'permissions', 'mobile', 'profile'].includes(activeTab);
+  const isMoreActive = ['bunks', 'tanks', 'nozzles', 'decant', 'users', 'scheduler', 'dsr', 'efficiency', 'permissions', 'mobile', 'profile'].includes(activeTab);
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 text-slate-700 dark:text-slate-300 backdrop-blur-md px-2 py-1 shadow-lg dark:shadow-2xl safe-area-pb transition-colors">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 text-slate-700 dark:text-slate-300 backdrop-blur-md px-2 py-1 shadow-lg dark:shadow-2xl safe-area-pb transition-colors touch-none select-none overscroll-none">
       <div className="flex items-center justify-around gap-1">
         {primaryTabs.map((tab) => {
           const Icon = tab.icon;

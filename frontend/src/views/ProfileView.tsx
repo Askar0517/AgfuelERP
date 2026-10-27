@@ -208,7 +208,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     .toUpperCase();
 
   return (
-    <div className="w-full space-y-6 pb-12 sm:pb-6">
+    <div className="w-full space-y-3.5 pb-12 sm:pb-6">
       {/* Breadcrumb Navigation */}
       <Breadcrumbs
         items={[

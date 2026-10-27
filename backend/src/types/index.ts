@@ -35,6 +35,11 @@ export interface FuelProduct {
   densityStandard15C?: number;
   densityTolerance: number;
   color: string;
+  colorName?: string;
+  globalRatePerLiter?: number;
+  stationRatePerLiter?: number | null;
+  isStationCustom?: boolean;
+  stationId?: string | null;
   updatedAt?: string;
 }
 

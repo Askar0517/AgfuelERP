@@ -174,22 +174,30 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
             )}
           </div>
 
-          {/* Unique Identifier Display */}
-          <div>
-            <div className="flex items-center justify-center gap-2">
-              <span className="font-mono text-base font-black text-slate-900 dark:text-white tracking-wider">
+          {/* Official Forecourt Asset Code Badge & 1-Click Copy */}
+          <div className="space-y-1.5">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500 block">
+              Official Forecourt Asset Code
+            </span>
+            <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-inner">
+              <span className="font-mono text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-wider">
                 {entityId}
               </span>
               <button
                 type="button"
                 onClick={handleCopy}
                 title="Copy Identifier"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer shadow-xs ${
+                  copied
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-emerald-600/15 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-600 hover:text-white'
+                }`}
               >
-                {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                <span>{copied ? 'Copied!' : 'Copy Code'}</span>
               </button>
             </div>
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-1">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-2">
               {entityName}
             </h3>
             {subtitle && (

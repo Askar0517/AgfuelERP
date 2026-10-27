@@ -28,7 +28,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({
   return (
     <nav
       aria-label="Breadcrumb navigation"
-      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-1.5 px-1 ${className}`}
+      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-0.5 px-0.5 ${className}`}
     >
       {/* Trail */}
       <ol className="flex items-center flex-wrap gap-1.5 text-xs text-slate-500 dark:text-slate-400 min-w-0">

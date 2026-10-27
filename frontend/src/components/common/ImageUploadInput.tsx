@@ -10,6 +10,7 @@ interface ImageUploadInputProps {
   onChange: (url: string | null) => void;
   className?: string;
   compactAvatar?: boolean;
+  compact?: boolean;
 }
 
 export const ImageUploadInput: React.FC<ImageUploadInputProps> = ({
@@ -20,6 +21,7 @@ export const ImageUploadInput: React.FC<ImageUploadInputProps> = ({
   onChange,
   className = '',
   compactAvatar = false,
+  compact = false,
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -204,17 +206,24 @@ export const ImageUploadInput: React.FC<ImageUploadInputProps> = ({
           onDragLeave={() => setDragActive(false)}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-4 transition cursor-pointer ${
+          className={`flex ${compact ? 'flex-row items-center justify-center gap-2 py-2 px-3' : 'flex-col items-center justify-center p-4'} rounded-xl border-2 border-dashed transition cursor-pointer ${
             dragActive
               ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20'
               : 'border-slate-200 dark:border-gray-700 bg-slate-50/60 dark:bg-gray-800/40 hover:border-emerald-500 dark:hover:border-emerald-400 hover:bg-slate-50 dark:hover:bg-gray-800'
           }`}
         >
           {isUploading ? (
-            <div className="flex flex-col items-center gap-2 py-1">
-              <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
+            <div className="flex items-center gap-2 py-0.5">
+              <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
               <span className="text-xs font-semibold text-slate-700 dark:text-gray-300">
                 Uploading to local storage...
+              </span>
+            </div>
+          ) : compact ? (
+            <div className="flex items-center gap-2 text-center">
+              <ImageIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span className="text-xs font-medium text-slate-700 dark:text-gray-300">
+                {helperText || 'Click or drag & drop invoice image here (PNG, JPG)'}
               </span>
             </div>
           ) : (

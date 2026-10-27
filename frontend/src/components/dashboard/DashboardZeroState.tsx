@@ -227,7 +227,7 @@ export const DashboardZeroState: React.FC<DashboardZeroStateProps> = ({
                 </div>
                 <div className="text-right">
                   <span className="text-sm font-mono font-bold text-slate-900 dark:text-white">
-                    \u20B9{fuel.ratePerLiter.toFixed(2)}
+                    ₹{fuel.ratePerLiter.toFixed(2)}
                   </span>
                   <span className="block text-[10px] text-slate-400">per liter</span>
                 </div>

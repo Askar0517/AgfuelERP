@@ -140,6 +140,13 @@ export const nozzleController = {
         return res.status(400).json({ error: 'Opening and closing meter numbers are required' });
       }
 
+      const photo = req.body.meterPhotoUrl || req.body.photoUrl;
+      if (!photo || typeof photo !== 'string' || !photo.trim()) {
+        return res.status(400).json({
+          error: 'Meter totalizer photograph is strictly mandatory for legal metrology and audit compliance.',
+        });
+      }
+
       const authUser = (req as any).user;
       const trustedName = authUser?.name || (req.headers['x-user-name'] as string) || enteredBy || recordedByName || 'Forecourt Attendant';
       const trustedRole = authUser?.role || (req.headers['x-user-role'] as string) || recordedBy || 'ATTENDANT';
@@ -158,7 +165,7 @@ export const nozzleController = {
         shiftCode,
         recordedBy: trustedRole,
         recordedByName: trustedName,
-        meterPhotoUrl: req.body.meterPhotoUrl || req.body.photoUrl,
+        meterPhotoUrl: photo.trim(),
       });
       res.status(201).json(reading);
     } catch (err: any) {

@@ -8,6 +8,7 @@ import {
   TankLoadDecanting,
   AnalyticsOverview,
   AuthUser,
+  ManualMeterReading,
 } from '../types';
 import {
   TrendingUp,
@@ -30,6 +31,7 @@ import {
 } from 'lucide-react';
 import { SelectDropdown } from '../components/common/SelectDropdown';
 import { DashboardZeroState } from '../components/dashboard/DashboardZeroState';
+import { getBunkCurrency } from '../utils/currency';
 
 interface DashboardViewProps {
   station: Station;
@@ -41,6 +43,7 @@ interface DashboardViewProps {
   dispensers: Dispenser[];
   shifts: Shift[];
   tankLoads: TankLoadDecanting[];
+  readings?: ManualMeterReading[];
   analytics: AnalyticsOverview | null;
   currentUser?: AuthUser | null;
   onOpenDipModal: (tank: Tank) => void;
@@ -58,6 +61,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   dispensers,
   shifts,
   tankLoads,
+  readings = [],
   currentUser,
   onOpenDipModal,
   onOpenDecantModal,
@@ -126,6 +130,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const activeStation =
     permittedStations.find((s) => s.id === effectiveBunkId) ||
     permittedStations[0];
+  const bunkCurrency = getBunkCurrency(activeStation);
 
   const currentTanks = tanks.filter((t) =>
     isAllBunks ? permittedStations.some((ps) => ps.id === t.stationId) : t.stationId === activeStation.id
@@ -142,15 +147,58 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const activeShifts = currentShifts.filter((s) => s.status === 'ACTIVE');
 
-  // Aggregated KPIs
+  // Aggregated KPIs including both settled shifts and nozzle meter sales
   const totalCapacity = currentTanks.reduce((s, t) => s + t.capacityLiters, 0);
   const totalVolume = currentTanks.reduce((s, t) => s + t.currentVolumeLiters, 0);
   const occupancyPct = totalCapacity > 0 ? (totalVolume / totalCapacity) * 100 : 0;
 
-  const totalFuelSoldToday = currentShifts.reduce((s, sh) => s + sh.totalFuelSoldLiters, 0);
-  const totalRevenueToday = currentShifts.reduce((s, sh) => s + sh.totalExpectedRevenue, 0);
-  const totalCashCollected = currentShifts.reduce((s, sh) => s + sh.cashSubmitted, 0);
-  const totalDigitalCollected = currentShifts.reduce((s, sh) => s + sh.digitalSubmitted, 0);
+  // Filter readings for active bunk (or permitted stations if ALL)
+  const currentReadings = (readings || []).filter((r) =>
+    isAllBunks ? permittedStations.some((ps) => ps.id === r.stationId) : r.stationId === activeStation.id
+  );
+
+  // Consider readings today or within the current operational 24h cycle
+  const isReadingInCurrentOperationalDay = (timestamp?: string | Date) => {
+    if (!timestamp) return false;
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return false;
+    const now = new Date();
+    const isSameDate =
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate();
+    const hoursElapsed = (now.getTime() - d.getTime()) / (1000 * 60 * 60);
+    return isSameDate || (hoursElapsed >= 0 && hoursElapsed < 24);
+  };
+
+  const todayReadings = currentReadings.filter((r) =>
+    isReadingInCurrentOperationalDay(r.readingTimestamp)
+  );
+
+  // Settled shifts today
+  const settledShiftsToday = currentShifts.filter(
+    (s) => s.status === 'SETTLED' && (isReadingInCurrentOperationalDay(s.endTime) || isReadingInCurrentOperationalDay(s.startTime))
+  );
+  const settledShiftCodes = new Set(
+    settledShiftsToday.map((s) => s.shiftCode).filter(Boolean)
+  );
+
+  // Meter readings not accounted for in settled shifts (live active shift or direct readings)
+  const unaggregatedReadings = todayReadings.filter(
+    (r) => !r.shiftCode || !settledShiftCodes.has(r.shiftCode)
+  );
+
+  const meterLitersToday = unaggregatedReadings.reduce((sum, r) => sum + (r.netSoldLiters || 0), 0);
+  const meterRevenueToday = unaggregatedReadings.reduce((sum, r) => sum + (r.netSalesAmount || 0), 0);
+
+  const shiftLitersToday = settledShiftsToday.reduce((s, sh) => s + (sh.totalFuelSoldLiters || 0), 0);
+  const shiftRevenueToday = settledShiftsToday.reduce((s, sh) => s + (sh.totalExpectedRevenue || 0), 0);
+
+  // Total Volume and Revenue Dispensed Today:
+  const totalFuelSoldToday = Number((shiftLitersToday + meterLitersToday).toFixed(2));
+  const totalRevenueToday = Number((shiftRevenueToday + meterRevenueToday).toFixed(2));
+  const totalCashCollected = currentShifts.reduce((s, sh) => s + (sh.cashSubmitted || 0), 0);
+  const totalDigitalCollected = currentShifts.reduce((s, sh) => s + (sh.digitalSubmitted || 0), 0);
 
   // Issues & Alerts
   const lowStockTanks = currentTanks.filter(
@@ -172,13 +220,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Title Zone */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <span className="h-2 w-2 rounded-full bg-[#12544F] animate-pulse" />
-            <span className="font-semibold text-[#12544F] dark:text-[#2BA096] uppercase tracking-wider text-[11px]">
-              Live Forecourt Operations
-            </span>
-            <span aria-hidden="true">\u00B7</span>
             <span>{todayFormatted}</span>
-            <span aria-hidden="true">\u00B7</span>
+            <span aria-hidden="true">·</span>
             <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
               {isAllBunks ? 'ALL-NETWORK' : activeStation?.code || 'BUNK-000001'}
             </span>
@@ -192,9 +235,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             ) : (
               <>
                 {activeStation?.location || 'Central Forecourt'}
-                <span className="mx-1.5" aria-hidden="true">\u00B7</span>
+                <span className="mx-1.5" aria-hidden="true">·</span>
                 Manager: <span className="font-medium text-slate-700 dark:text-slate-300">{activeStation?.managerName || 'Unassigned'}</span>
-                <span className="mx-1.5" aria-hidden="true">\u00B7</span>
+                <span className="mx-1.5" aria-hidden="true">·</span>
                 Timezone: <span className="font-mono text-[#12544F] dark:text-[#2BA096]">{activeStation?.timezone || 'Asia/Kolkata'}</span>
               </>
             )}
@@ -204,7 +247,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Dashboard Bunk Selector & Navigation Toolbar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
           {/* Bunk Selector */}
-          <div className="min-w-[260px] sm:min-w-[300px]">
+          <div className="w-full sm:w-72 md:w-80 shrink-0">
             <SelectDropdown
               label="Filter by Fuel Bunk"
               options={[
@@ -220,8 +263,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   : []),
                 ...permittedStations.map((st) => ({
                   value: st.id,
-                  label: `${st.name} (${st.code})`,
-                  description: st.location,
+                  label: st.name.replace(/\s*\([A-Z0-9-]+\)\s*$/i, '').trim() || st.name,
                   badge: st.code,
                 })),
               ]}
@@ -256,16 +298,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <Fuel className="h-3.5 w-3.5 text-[#12544F] dark:text-[#2BA096]" />
               <span>Nozzles</span>
             </button>
-            {currentTanks[0] && (
-              <button
-                type="button"
-                onClick={() => onOpenDecantModal(currentTanks[0])}
-                className="flex items-center gap-1.5 rounded-xl bg-[#12544F] hover:bg-[#0E433F] px-3.5 py-2 text-xs font-semibold text-white shadow-2xs active:scale-95 transition cursor-pointer"
-              >
-                <ArrowDownToLine className="h-3.5 w-3.5" />
-                <span>Decant Load</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => onNavigate('tanks')}
+              className="flex items-center gap-1.5 rounded-xl bg-[#12544F] hover:bg-[#0E433F] px-3.5 py-2 text-xs font-semibold text-white shadow-2xs active:scale-95 transition cursor-pointer"
+            >
+              <ArrowDownToLine className="h-3.5 w-3.5" />
+              <span>Decant Load</span>
+            </button>
           </div>
         </div>
       </div>
@@ -283,7 +323,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
           <div className="mt-2 font-mono text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight tabular-nums truncate">
-            \u20B9{totalRevenueToday.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            {bunkCurrency.symbol}{totalRevenueToday.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
           <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             <span className="font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
@@ -303,10 +343,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
           <div className="mt-2 font-mono text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight tabular-nums truncate">
-            \u20B9{(totalCashCollected + totalDigitalCollected).toLocaleString()}
+            {bunkCurrency.symbol}{(totalCashCollected + totalDigitalCollected).toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
           <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
-            Cash: \u20B9{totalCashCollected.toLocaleString()} &bull; POS: \u20B9{totalDigitalCollected.toLocaleString()}
+            {totalCashCollected + totalDigitalCollected === 0 && totalRevenueToday > 0 ? (
+              <span className="text-amber-600 dark:text-amber-400 font-sans font-medium">
+                Pending Shift Settlement Handover
+              </span>
+            ) : (
+              `Cash: ${bunkCurrency.symbol}${totalCashCollected.toLocaleString()} • POS: ${bunkCurrency.symbol}${totalDigitalCollected.toLocaleString()}`
+            )}
           </div>
         </div>
 
@@ -376,7 +422,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={() => onOpenDecantModal(tank)}
+                  onClick={() => onNavigate('tanks')}
                   className="shrink-0 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold px-3 py-1.5 transition active:scale-95"
                 >
                   Decant Load Now
@@ -420,33 +466,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* 4. Important Activity: Two-Column Operational Core */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Left Column: Attendant Shifts & Handover Activity */}
+        {/* Left Column: Attendant Shifts & Meter Sales Activity */}
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xs dark:shadow-sm transition-colors">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
             <div>
               <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Layers className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                <span>Forecourt Shift Activity</span>
+                <span>Forecourt Shift & Meter Sales Activity</span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Duty rosters, meter sales & cash pocket settlements
+                Duty rosters, nozzle meter sales & handover settlements
               </p>
             </div>
             <button
               type="button"
-              onClick={() => onNavigate('shifts')}
+              onClick={() => onNavigate(currentShifts.length > 0 ? 'shifts' : 'meters')}
               className="flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition"
             >
-              <span>View All Shifts</span>
+              <span>{currentShifts.length > 0 ? 'View All Shifts' : 'View Meter Readings'}</span>
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          {currentShifts.length === 0 ? (
+          {currentShifts.length === 0 && todayReadings.length === 0 ? (
             <div className="py-12 text-center text-xs text-slate-400 dark:text-slate-500">
-              No shifts recorded today. Click "Assign Shift" from the Shift Settlement tab.
+              No shifts or meter readings recorded today. Click "Meter Readings" to log dispenser sales or "Shifts" to assign duty.
             </div>
-          ) : (
+          ) : currentShifts.length > 0 ? (
             <div className="space-y-3">
               {currentShifts.slice(0, 4).map((shift) => (
                 <div
@@ -458,7 +504,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <span className="font-semibold text-slate-900 dark:text-white truncate">
                         {shift.attendantName}
                       </span>
-                      <span className="text-slate-400" aria-hidden="true">\u00B7</span>
+                      <span className="text-slate-400" aria-hidden="true">·</span>
                       <span className="font-mono text-slate-600 dark:text-slate-400 font-medium">
                         Island #{shift.islandNumber}
                       </span>
@@ -474,7 +520,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
                     <div className="mt-1 text-slate-500 dark:text-slate-400 text-[11px] font-mono">
                       Shift: {shift.shiftCode}
-                      <span className="mx-1" aria-hidden="true">\u00B7</span>
+                      <span className="mx-1" aria-hidden="true">·</span>
                       Started: {new Date(shift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
@@ -483,7 +529,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <div>
                       <span className="text-[10px] text-slate-400 block font-sans">Expected Sales</span>
                       <span className="font-bold text-slate-900 dark:text-white tabular-nums">
-                        \u20B9{shift.totalExpectedRevenue.toLocaleString()}
+                        {bunkCurrency.symbol}{shift.totalExpectedRevenue.toLocaleString()}
                       </span>
                     </div>
                     <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums mt-0.5">
@@ -492,6 +538,64 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </div>
                 </div>
               ))}
+            </div>
+          ) : (
+            /* Direct Meter Dispenser Readings Recorded Today */
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
+                <span>Recent Dispenser Meter Sales</span>
+                <span className="text-emerald-600 dark:text-emerald-400">{todayReadings.length} Recorded Today</span>
+              </div>
+              {todayReadings.slice(0, 4).map((reading) => {
+                const fuel = fuels.find((f) => f.code === reading.fuelCode);
+                return (
+                  <div
+                    key={reading.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/70 p-3.5 text-xs transition"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: fuel?.color || '#10b981' }}
+                        />
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          {reading.nozzleId}
+                        </span>
+                        <span className="font-semibold text-slate-600 dark:text-slate-300">
+                          ({fuel?.name || reading.fuelCode})
+                        </span>
+                        <span className="text-slate-400" aria-hidden="true">·</span>
+                        <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                          {reading.id}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-slate-500 dark:text-slate-400 text-[11px]">
+                        Logged by <strong className="text-slate-700 dark:text-slate-300">{reading.enteredBy}</strong>
+                        <span className="mx-1" aria-hidden="true">·</span>
+                        <span className="font-mono">
+                          {new Date(reading.readingTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {reading.remarks && (
+                          <span className="text-slate-400 italic ml-1">· "{reading.remarks}"</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex sm:flex-col items-end justify-between font-mono text-right shrink-0">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-sans">Recorded Sales</span>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums text-sm">
+                          {bunkCurrency.symbol}{reading.netSalesAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-600 dark:text-slate-400 font-semibold tabular-nums mt-0.5">
+                        {reading.netSoldLiters.toLocaleString()} L @ {bunkCurrency.symbol}{reading.fuelRate}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -541,7 +645,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <span className="font-bold text-slate-900 dark:text-white">
                           Tank #{tank.tankNumber}
                         </span>
-                        <span className="text-slate-400" aria-hidden="true">\u00B7</span>
+                        <span className="text-slate-400" aria-hidden="true">·</span>
                         <span className="font-semibold text-slate-700 dark:text-slate-300">
                           {fuel?.name || tank.fuelCode}
                         </span>
@@ -590,7 +694,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </span>
               <button
                 type="button"
-                onClick={() => onNavigate('tanks')}
+                onClick={() => onNavigate('decant')}
                 className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-semibold"
               >
                 All Receipts
@@ -611,7 +715,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <div>
                       <span className="font-bold text-slate-900 dark:text-white text-xs">{load.tankerNumber}</span>
                       <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-sans">
-                        Inv #{load.invoiceNo} \u00B7 <span className="font-semibold text-slate-700 dark:text-slate-300">{load.fuelCode}</span>
+                        Inv #{load.invoiceNo} · <span className="font-semibold text-slate-700 dark:text-slate-300">{load.fuelCode}</span>
                       </span>
                     </div>
                     <div className="text-right">

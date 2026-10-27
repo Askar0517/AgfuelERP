@@ -19,9 +19,11 @@ import {
 
 const API_BASE_URL = (
   (import.meta as any).env?.VITE_API_URL ||
-  (typeof window !== 'undefined' && (window.location.port === '3000' || window.location.port === '5173')
-    ? 'http://172.20.10.3:5000'
-    : '')
+  (typeof window !== 'undefined' && window.location.protocol === 'https:'
+    ? '' // Use Vite HTTPS reverse proxy to prevent browser Mixed Content errors
+    : (typeof window !== 'undefined' && (window.location.port === '3000' || window.location.port === '5173')
+      ? 'http://172.20.10.3:5000'
+      : ''))
 ).replace(/\/$/, '');
 
 let currentActiveRole: UserRole = 'OWNER';
@@ -119,11 +121,17 @@ export const api = {
     }),
 
   // 2. Fuels
-  getFuels: () => request<FuelProduct[]>('/api/fuels'),
-  updateFuelRate: (code: string, rate: number) =>
+  getFuels: (stationId?: string) =>
+    request<FuelProduct[]>(stationId && stationId !== 'ALL' ? `/api/fuels?stationId=${stationId}` : '/api/fuels'),
+  updateFuelRate: (code: string, rate: number, stationId?: string | null, remarks?: string) =>
     request<FuelProduct[]>(`/api/fuels/${code}/rate`, {
       method: 'POST',
-      body: JSON.stringify({ rate }),
+      body: JSON.stringify({ rate, stationId, remarks }),
+    }),
+  resetFuelRate: (code: string, stationId: string) =>
+    request<FuelProduct[]>(`/api/fuels/${code}/reset`, {
+      method: 'POST',
+      body: JSON.stringify({ stationId }),
     }),
 
   // 3. Tanks
@@ -294,7 +302,7 @@ export const api = {
     request<EODSettlement[]>(
       stationId ? `/api/eod/settlements?stationId=${stationId}` : '/api/eod/settlements'
     ),
-    runEODClose: (payload: {
+  runEODClose: (payload: {
     stationId: string;
     settlementDate: string;
     timezone: string;
@@ -327,8 +335,7 @@ export const api = {
   getProfile: (role?: UserRole, stationId?: string) => {
     const qRole = role || currentActiveRole;
     return request<UserProfile>(
-      `/api/profile?role=${encodeURIComponent(qRole)}${
-        stationId ? `&stationId=${encodeURIComponent(stationId)}` : ''
+      `/api/profile?role=${encodeURIComponent(qRole)}${stationId ? `&stationId=${encodeURIComponent(stationId)}` : ''
       }`
     );
   },

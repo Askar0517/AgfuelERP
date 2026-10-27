@@ -21,8 +21,14 @@ import {
   QrCode,
   Bell,
   Database,
+  Truck,
+  Search,
+  X,
+  ChevronRight,
 } from 'lucide-react';
 import DbSyncModal from './DbSyncModal';
+import { ModalPortal } from './ModalPortal';
+import { getBunkCurrency } from '../../utils/currency';
 
 interface HeaderProps {
   stations?: Station[];
@@ -62,6 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
   const { theme, toggleTheme, isDark } = useTheme();
   const { unreadCount } = useNotification();
   const currentStation = activeStation || stations.find((s) => s.id === currentStationId) || stations[0];
+  const bunkCurrency = getBunkCurrency(currentStation);
 
   // User dropdown menu state
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -74,6 +81,14 @@ export const Header: React.FC<HeaderProps> = ({
   // Database Connection & Table Sync Diagnostics modal state
   const [isDbSyncModalOpen, setIsDbSyncModalOpen] = useState(false);
 
+  // Bunk Switcher dropdown menu state (Desktop)
+  const [isBunkMenuOpen, setIsBunkMenuOpen] = useState(false);
+  const bunkMenuRef = useRef<HTMLDivElement>(null);
+
+  // Mobile Forecourt Switcher Sheet state
+  const [isMobileBunkSheetOpen, setIsMobileBunkSheetOpen] = useState(false);
+  const [bunkSearchQuery, setBunkSearchQuery] = useState('');
+
   // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -84,10 +99,53 @@ export const Header: React.FC<HeaderProps> = ({
       if (notificationRef.current && !notificationRef.current.contains(target)) {
         setIsNotificationOpen(false);
       }
+      if (bunkMenuRef.current && !bunkMenuRef.current.contains(target)) {
+        setIsBunkMenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Lock body scroll when mobile bunk sheet is open
+  useEffect(() => {
+    if (isMobileBunkSheetOpen) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, [isMobileBunkSheetOpen]);
+
+  // Close menus on Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsBunkMenuOpen(false);
+        setIsMobileBunkSheetOpen(false);
+        setIsUserMenuOpen(false);
+        setIsNotificationOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const filteredStations = stations.filter((st) => {
+    if (!bunkSearchQuery.trim()) return true;
+    const q = bunkSearchQuery.toLowerCase();
+    return (
+      st.name.toLowerCase().includes(q) ||
+      st.code.toLowerCase().includes(q) ||
+      (st.location && st.location.toLowerCase().includes(q)) ||
+      (st.managerName && st.managerName.toLowerCase().includes(q))
+    );
+  });
 
   // Live ticking clock in station timezone
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -179,42 +237,165 @@ export const Header: React.FC<HeaderProps> = ({
     .toUpperCase();
 
   return (
-    <header className="shrink-0 z-30 w-full border-b border-slate-200 dark:border-[#194C47] bg-white/95 dark:bg-[#0D2926]/95 backdrop-blur-md text-slate-800 dark:text-slate-100 shadow-2xs dark:shadow-md transition-colors">
+    <header className="shrink-0 z-30 w-full border-b border-slate-200 dark:border-[#194C47] bg-white/95 dark:bg-[#0D2926]/95 backdrop-blur-md text-slate-800 dark:text-slate-100 shadow-2xs dark:shadow-md transition-colors select-none overscroll-none">
       {/* Top Bar */}
       <div className="px-3 sm:px-5 py-2.5">
         <div className="flex items-center justify-between gap-3">
-          {/* Left Zone: Menu Toggle + Brand Logo */}
-          <div className="flex items-center gap-2.5 min-w-0 flex-1 sm:flex-none">
+          {/* Left Zone: Brand Logo & Station Switcher Context */}
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Mobile Hamburger Menu Toggle */}
             <button
               type="button"
               onClick={handleToggleMenu}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 dark:border-[#194C47] bg-slate-50 dark:bg-[#123733] text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-[#12544F] dark:hover:border-[#2BA096] active:scale-95 transition cursor-pointer"
+              className="lg:hidden flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 dark:border-[#194C47] bg-slate-50 dark:bg-[#123733] text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-[#12544F] dark:hover:border-[#2BA096] active:scale-95 transition cursor-pointer"
               title="Toggle Navigation Menu"
               aria-label="Toggle Navigation Menu"
             >
               <Menu className="h-4 w-4" />
             </button>
 
-            <div className="flex items-center gap-2 font-bold text-xs sm:text-sm tracking-tight text-[#12544F] dark:text-[#F3F8F7]">
-              <img
-                src="/logo.png"
-                alt="AG Fuels ERP Logo"
-                className="h-7 w-auto max-h-7 object-contain rounded-md"
-              />
-              <span className="font-extrabold tracking-tight">AG Fuels</span>
-              <span className="hidden sm:inline text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                ERP
-              </span>
+            {/* Primary Global Brand */}
+            <div className="flex items-center gap-2.5 shrink-0">
+              <div className="p-1 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/25 shrink-0">
+                <img
+                  src="/logo.png"
+                  alt="AG Fuels ERP Logo"
+                  className="h-7 sm:h-8 w-auto max-h-8 object-contain rounded-lg"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-black text-base sm:text-lg tracking-tight text-[#12544F] dark:text-[#F3F8F7]">
+                  AG Fuels
+                </span>
+                <span className="hidden xl:inline-flex items-center text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#12544F]/10 text-[#12544F] dark:bg-emerald-500/20 dark:text-emerald-300 border border-[#12544F]/20 dark:border-emerald-500/30">
+                  Forecourt ERP
+                </span>
+              </div>
             </div>
+
+            {/* Mobile Bunk Switcher Pill (Opens Bottom Sheet) */}
+            {currentStation && (
+              <button
+                type="button"
+                onClick={() => stations.length > 1 && setIsMobileBunkSheetOpen(true)}
+                className={`sm:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-50 dark:bg-[#123733] border border-slate-200/90 dark:border-[#194C47] text-xs font-bold text-slate-800 dark:text-slate-100 max-w-[130px] xs:max-w-[170px] truncate transition active:scale-95 shadow-2xs ${
+                  stations.length > 1 ? 'cursor-pointer hover:border-[#12544F] active:bg-slate-100 dark:active:bg-[#1a4a45]' : 'cursor-default'
+                }`}
+                title={stations.length > 1 ? 'Tap to switch petrol bunk' : `Active Bunk: ${currentStation.name}`}
+                aria-label="Switch active petrol bunk"
+              >
+                <Building2 className="h-3.5 w-3.5 text-[#12544F] dark:text-[#2BA096] shrink-0" />
+                <span className="truncate text-xs font-bold">
+                  {currentStation.name}
+                </span>
+                {stations.length > 1 && (
+                  <ChevronDown className="h-3 w-3 text-slate-400 dark:text-slate-500 shrink-0" />
+                )}
+              </button>
+            )}
+
+            {/* Active Petrol Bunk / Station Switcher Dropdown (Desktop) */}
+            {currentStation && (
+              <div className="hidden sm:relative sm:block" ref={bunkMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => stations.length > 1 && setIsBunkMenuOpen((prev) => !prev)}
+                  className={`flex items-center gap-1.5 pl-2 sm:pl-2.5 sm:border-l border-slate-200 dark:border-[#194C47] text-xs ${
+                    stations.length > 1 ? 'cursor-pointer group' : 'cursor-default'
+                  }`}
+                  title={stations.length > 1 ? 'Switch Active Petrol Bunk' : `Active Bunk: ${currentStation.name}`}
+                  aria-expanded={isBunkMenuOpen}
+                >
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-50 dark:bg-[#123733] border border-slate-200/90 dark:border-[#194C47] group-hover:border-[#12544F] dark:group-hover:border-[#2BA096] group-hover:shadow-2xs transition active:scale-95">
+                    <Building2 className="h-3.5 w-3.5 text-[#12544F] dark:text-[#2BA096] shrink-0" />
+                    <span className="font-bold text-slate-800 dark:text-slate-100 truncate max-w-[150px] sm:max-w-[220px] md:max-w-[280px] lg:max-w-[360px]">
+                      {currentStation.name}
+                    </span>
+                    {stations.length > 1 && (
+                      <ChevronDown
+                        className={`h-3 w-3 text-slate-400 dark:text-slate-500 transition-transform ${
+                          isBunkMenuOpen ? 'rotate-180 text-[#12544F] dark:text-[#2BA096]' : ''
+                        }`}
+                      />
+                    )}
+                  </div>
+                </button>
+
+                {/* Bunk Switcher Dropdown Menu */}
+                {isBunkMenuOpen && stations.length > 1 && (
+                  <div className="absolute left-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 dark:border-[#194C47] bg-white dark:bg-[#0D2926] p-2 shadow-2xl z-50 animate-fadeIn">
+                    <div className="px-3 py-2 border-b border-slate-100 dark:border-[#194C47] flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider font-mono">
+                        <Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>Select Active Forecourt</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded-full font-bold">
+                        {stations.length} Bunks
+                      </span>
+                    </div>
+
+                    {stations.length > 3 && (
+                      <div className="p-2 border-b border-slate-100 dark:border-[#194C47]">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                          <input
+                            type="text"
+                            value={bunkSearchQuery}
+                            onChange={(e) => setBunkSearchQuery(e.target.value)}
+                            placeholder="Filter stations..."
+                            className="w-full pl-8 pr-3 py-1 text-xs rounded-lg border border-slate-200 dark:border-[#194C47] bg-slate-50 dark:bg-[#123733] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="py-1 max-h-64 overflow-y-auto space-y-1">
+                      {filteredStations.map((st) => {
+                        const isSelected = st.id === (currentStationId || currentStation.id);
+                        return (
+                          <button
+                            key={st.id}
+                            type="button"
+                            onClick={() => {
+                              if (onSelectStation) onSelectStation(st.id);
+                              setIsBunkMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition cursor-pointer ${
+                              isSelected
+                                ? 'bg-emerald-500/10 dark:bg-emerald-500/20 border border-emerald-500/30'
+                                : 'hover:bg-slate-50 dark:hover:bg-[#123733]/60 border border-transparent'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1 pr-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                  {st.name}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                                {st.location || 'Central Forecourt'} · {st.managerName || 'Unassigned'}
+                              </p>
+                            </div>
+                            {isSelected && (
+                              <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Middle Zone: Station Timezone Clock & Day Close Countdown */}
-          <div className="hidden md:flex items-center gap-4 text-xs font-mono">
+          <div className="hidden lg:flex items-center gap-4 text-xs font-mono">
             <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
               <Clock className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span className="font-semibold text-slate-900 dark:text-white tabular-nums">{currentTime || '...'}</span>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans hidden lg:inline">
-                \u00B7 {currentDate} ({currentStation?.timezone || 'IST'})
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans hidden xl:inline">
+                · {currentDate} ({currentStation?.timezone || 'IST'})
               </span>
             </div>
 
@@ -227,26 +408,26 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Right Zone: QR Scanner, Theme Switcher & User Profile Menu */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Right Zone: Essential Global Controls & User Profile Menu */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {onOpenQRScanner && (
               <button
                 type="button"
                 onClick={onOpenQRScanner}
-                className="flex h-9 items-center gap-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-300 dark:hover:border-emerald-700 active:scale-95 transition text-xs font-semibold cursor-pointer"
+                className="flex h-9 w-9 sm:w-auto items-center justify-center gap-1.5 sm:px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-300 dark:hover:border-emerald-700 active:scale-95 transition text-xs font-semibold cursor-pointer shrink-0"
                 title="Scan QR Code (Bunk, Tank, or Nozzle)"
                 aria-label="Scan QR Code"
               >
-                <QrCode className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                <span className="hidden sm:inline">Scan QR</span>
+                <QrCode className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="hidden md:inline">Scan QR</span>
               </button>
             )}
 
-            {/* Quick 1-Click Theme Switcher Button */}
+            {/* Quick 1-Click Theme Switcher Button - Hidden on mobile, accessible in user profile dropdown */}
             <button
               type="button"
               onClick={toggleTheme}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600 active:scale-95 transition"
+              className="hidden sm:flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600 active:scale-95 transition shrink-0"
               title={isDark ? 'Switch to Light theme' : 'Switch to Dark theme'}
               aria-label={isDark ? 'Switch to Light theme' : 'Switch to Dark theme'}
             >
@@ -257,11 +438,11 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
-            {/* Database Connection & Table Sync Diagnostics Button */}
+            {/* Database Connection & Table Sync Diagnostics Button - Hidden on mobile */}
             <button
               type="button"
               onClick={() => setIsDbSyncModalOpen(true)}
-              className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-300 dark:hover:border-emerald-700 active:scale-95 transition cursor-pointer"
+              className="hidden md:flex relative h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-300 dark:hover:border-emerald-700 active:scale-95 transition cursor-pointer shrink-0"
               title="Database Connection & Table Sync Diagnostics"
               aria-label="Database Connection & Table Sync Diagnostics"
             >
@@ -270,7 +451,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {/* Forecourt Notification Module Bell Button */}
-            <div className="relative" ref={notificationRef}>
+            <div className="relative shrink-0" ref={notificationRef}>
               <button
                 type="button"
                 onClick={() => setIsNotificationOpen((prev) => !prev)}
@@ -317,7 +498,7 @@ export const Header: React.FC<HeaderProps> = ({
                     {initials}
                   </div>
                 )}
-                <div className="hidden sm:flex flex-col text-left leading-tight">
+                <div className="hidden md:flex flex-col text-left leading-tight">
                   <span className="font-bold text-slate-900 dark:text-white truncate max-w-[110px]">
                     {displayName.split(' ')[0]}
                   </span>
@@ -385,6 +566,44 @@ export const Header: React.FC<HeaderProps> = ({
                       <span className="text-[10px] font-medium text-slate-400 dark:text-gray-500 bg-slate-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
                         View / Edit
                       </span>
+                    </button>
+
+                    {/* Update Fuel Rates (Owner & Manager) */}
+                    {(currentRole === 'OWNER' || currentRole === 'MANAGER') && onOpenPriceModal && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onOpenPriceModal();
+                        }}
+                        className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800/80 transition"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Tag className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          <span>Update Fuel Rates</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded font-semibold">
+                          Prices
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Database Connection & Table Sync (for Mobile Viewports) */}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setIsDbSyncModalOpen(true);
+                      }}
+                      className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800/80 transition md:hidden"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Database className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                        <span>Database Diagnostics</span>
+                      </div>
+                      <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
                     </button>
 
                     {/* Theme Switcher in Dropdown */}
@@ -455,42 +674,169 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Fuel Rate Ticker Strip */}
-      <div className="flex items-center justify-between gap-3 px-3 sm:px-5 py-2 bg-slate-50 dark:bg-[#081D1B] border-t border-slate-200 dark:border-[#194C47] text-xs shadow-2xs dark:shadow-inner transition-colors">
-        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar py-0.5 min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-semibold shrink-0">
-            <Tag className="h-3.5 w-3.5 text-[#12544F] dark:text-[#2BA096]" />
-            <span className="text-[11px] uppercase tracking-wider font-mono">Live Forecourt Rates</span>
-          </div>
-
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-            {fuels.map((fuel) => (
-              <div
-                key={fuel.code}
-                className="flex items-center gap-1.5 shrink-0 rounded-lg border border-slate-200 dark:border-[#194C47] bg-white dark:bg-[#0D2926] px-2.5 py-1 font-mono text-[11px] shadow-2xs"
-              >
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: fuel.color }}
-                  aria-hidden="true"
-                />
-                <span className="font-sans font-medium text-slate-600 dark:text-slate-400 text-[11px]">{fuel.shortName}</span>
-                <span className="font-bold text-slate-900 dark:text-white tabular-nums">\u20B9{fuel.ratePerLiter.toFixed(2)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {(currentRole === 'OWNER' || currentRole === 'MANAGER') && (
+      {/* Mobile Dedicated Operating Forecourt Context Bar (Visible ONLY on Mobile < sm) */}
+      {currentStation && (
+        <div className="sm:hidden border-t border-slate-200/90 dark:border-[#194C47] bg-gradient-to-r from-[#0C3530] via-[#092B27] to-[#072421] px-3 py-1.5 flex items-center justify-between text-white shadow-xs">
           <button
             type="button"
-            onClick={onOpenPriceModal}
-            className="shrink-0 rounded-lg border border-[#12544F]/30 dark:border-[#2BA096]/40 bg-[#12544F]/10 dark:bg-[#12544F]/25 px-2.5 py-1 text-[11px] font-semibold text-[#12544F] dark:text-[#2BA096] hover:bg-[#12544F]/20 dark:hover:bg-[#12544F]/35 active:scale-95 transition shadow-2xs whitespace-nowrap cursor-pointer"
+            onClick={() => stations.length > 1 && setIsMobileBunkSheetOpen(true)}
+            className={`flex items-center gap-2 min-w-0 text-left flex-1 mr-2 ${
+              stations.length > 1 ? 'cursor-pointer active:opacity-80' : 'cursor-default'
+            }`}
+            title={stations.length > 1 ? 'Tap to switch petrol bunk' : `Current Bunk: ${currentStation.name}`}
           >
-            Update Rates
+            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shrink-0">
+              <Building2 className="h-3.5 w-3.5" />
+            </div>
+            <div className="min-w-0 flex-1 flex items-center gap-1.5">
+              <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-teal-300/90 shrink-0">
+                Bunk:
+              </span>
+              <span className="font-bold text-xs text-white truncate max-w-[200px] xs:max-w-[250px]">
+                {currentStation.name}
+              </span>
+            </div>
           </button>
-        )}
-      </div>
+
+          {stations.length > 1 ? (
+            <button
+              type="button"
+              onClick={() => setIsMobileBunkSheetOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gradient-to-r from-emerald-600/40 to-teal-600/40 hover:from-emerald-600/60 hover:to-teal-600/60 text-emerald-200 border border-emerald-400/40 active:scale-95 transition text-[11px] font-bold shrink-0 cursor-pointer shadow-xs"
+              aria-label="Switch active petrol bunk"
+            >
+              <span>Switch</span>
+              <ChevronDown className="h-3 w-3 text-emerald-300" />
+            </button>
+          ) : (
+            <span className="text-[10px] font-mono text-emerald-300/80 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full shrink-0">
+              Active
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Mobile Forecourt Switcher Bottom Sheet / Modal (Slide-Up Native Mobile Drawer) */}
+      {isMobileBunkSheetOpen && (
+        <ModalPortal
+          isOpen={isMobileBunkSheetOpen}
+          onClose={() => setIsMobileBunkSheetOpen(false)}
+          className="fixed inset-0 z-[9999] flex flex-col justify-end p-0 sm:hidden"
+          backdropClassName="bg-slate-950/75 backdrop-blur-sm"
+          zIndex={9999}
+        >
+          {/* Bottom Sheet Card Container */}
+          <div
+            className="w-full max-h-[85vh] flex flex-col rounded-t-3xl border-t border-[#1F6E65] bg-gradient-to-b from-[#0E3D38] via-[#0B332E] to-[#072421] text-white shadow-2xl overflow-hidden animate-slideUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Sheet Handle */}
+            <div className="pt-3 pb-1 flex justify-center">
+              <div className="h-1.5 w-12 rounded-full bg-white/20" />
+            </div>
+
+            {/* Header */}
+            <div className="px-5 py-3 border-b border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-300">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-white">Select Operating Forecourt</h3>
+                  <p className="text-[11px] text-teal-200/80 font-mono">
+                    {stations.length} Bunks Configured
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileBunkSheetOpen(false)}
+                className="h-8 w-8 rounded-xl bg-white/10 hover:bg-white/20 text-teal-200 hover:text-white flex items-center justify-center transition cursor-pointer"
+                aria-label="Close station switcher"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Quick Filter Search if more than 2 bunks */}
+            {stations.length > 2 && (
+              <div className="px-5 pt-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-teal-300/60" />
+                  <input
+                    type="text"
+                    value={bunkSearchQuery}
+                    onChange={(e) => setBunkSearchQuery(e.target.value)}
+                    placeholder="Search bunk by name or code..."
+                    className="w-full pl-9 pr-4 py-2 rounded-xl bg-black/30 border border-white/15 text-xs text-white placeholder-teal-200/40 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Stations List */}
+            <div className="px-5 py-3 space-y-2.5 overflow-y-auto max-h-[55vh] safe-area-pb">
+              {filteredStations.map((st) => {
+                const isSelected = st.id === (currentStationId || currentStation.id);
+                return (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => {
+                      if (onSelectStation) onSelectStation(st.id);
+                      setIsMobileBunkSheetOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between p-3.5 rounded-2xl text-left transition active:scale-[0.98] cursor-pointer ${
+                      isSelected
+                        ? 'bg-gradient-to-r from-emerald-500/25 to-teal-500/20 border-2 border-emerald-400 shadow-[0_4px_20px_rgba(16,185,129,0.25)]'
+                        : 'bg-white/5 hover:bg-white/10 border border-white/10'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1 pr-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-extrabold text-sm text-white truncate">
+                          {st.name}
+                        </span>
+                      </div>
+                      <p className="text-xs text-teal-100/70 truncate flex items-center gap-1.5">
+                        <span>{st.location || 'Central Forecourt'}</span>
+                        {st.managerName && (
+                          <>
+                            <span>·</span>
+                            <span>Mgr: {st.managerName}</span>
+                          </>
+                        )}
+                      </p>
+                      {st.operatingHours && (
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            {st.operatingHours === '24_HOURS' ? '24/7 Operations' : 'Day Operations'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="shrink-0 flex items-center">
+                      {isSelected ? (
+                        <div className="h-7 w-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
+                          <Check className="h-4 w-4 stroke-[3]" />
+                        </div>
+                      ) : (
+                        <div className="h-7 w-7 rounded-full border border-white/20 flex items-center justify-center text-white/40">
+                          <ChevronRight className="h-4 w-4" />
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+
 
       {/* Database Connection & Table Sync Diagnostics Modal */}
       <DbSyncModal

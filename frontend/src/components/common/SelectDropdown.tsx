@@ -204,7 +204,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
               {selectedOption.icon && (
                 <selectedOption.icon className="w-4 h-4 text-[#12544F] dark:text-[#38A399] shrink-0" />
               )}
-              <span className="truncate font-medium text-slate-900 dark:text-slate-100">
+              <span className="truncate font-medium text-slate-900 dark:text-slate-100 min-w-0 flex-1">
                 {selectedOption.label}
               </span>
               {selectedOption.badge && (
@@ -299,14 +299,16 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
                     }`}
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {option.icon && (
-                          <option.icon className="w-3.5 h-3.5 text-[#12544F] dark:text-[#38A399] shrink-0" />
-                        )}
-                        <span className="truncate">{option.label}</span>
+                      <div className="flex items-center justify-between gap-2 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          {option.icon && (
+                            <option.icon className="w-3.5 h-3.5 text-[#12544F] dark:text-[#38A399] shrink-0" />
+                          )}
+                          <span className="truncate">{option.label}</span>
+                        </div>
                         {option.badge && (
                           <span
-                            className={`text-[10px] font-semibold px-1.5 py-0.2 rounded border shrink-0 ${
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${
                               option.badgeClass ||
                               'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                             }`}

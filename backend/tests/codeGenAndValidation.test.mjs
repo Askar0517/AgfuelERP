@@ -256,9 +256,29 @@ test('mockStore.createTank with 0 opening stock sets volume to 0 (not 18000)', (
 });
 
 test('deleteTank blocks deletion if linked nozzle is ACTIVE', () => {
-  // Tank 1 has active nozzles
+  let activeTank = mockStore.tanks.find((t) => t.id === 'TANK-000001');
+  if (!activeTank) {
+    activeTank = mockStore.createTank({
+      id: 'TANK-000001',
+      stationId: 'st-101',
+      tankNumber: 1,
+      name: '1',
+      fuelCode: 'OCTANE_95',
+      capacityLiters: 20000,
+      openingStockLiters: 10000,
+    });
+  }
+  if (!mockStore.nozzles.some((n) => n.tankId === activeTank.id && n.status === 'ACTIVE')) {
+    mockStore.createNozzle({
+      stationId: 'st-101',
+      tankId: activeTank.id,
+      nozzleNumber: 101,
+      fuelCode: 'OCTANE_95',
+      status: 'ACTIVE',
+    });
+  }
   assert.throws(() => {
-    mockStore.deleteTank('TANK-000001');
+    mockStore.deleteTank(activeTank.id);
   }, /because it is linked to active nozzle/);
 });
 
@@ -289,13 +309,13 @@ test('deleteTank blocks deletion if tank has decanting delivery history even wit
 });
 
 test('deactivateTank and updateTank block deactivation when linked nozzles are ACTIVE', () => {
-  // Tank 1 is linked to active nozzles
+  const activeTank = mockStore.tanks.find((t) => t.id === 'TANK-000001') || mockStore.tanks[0];
   assert.throws(() => {
-    mockStore.deactivateTank('TANK-000001', 'INACTIVE');
+    mockStore.deactivateTank(activeTank.id, 'INACTIVE');
   }, /Cannot deactivate tank.*linked to active nozzle/);
 
   assert.throws(() => {
-    mockStore.updateTank('TANK-000001', { status: 'INACTIVE' });
+    mockStore.updateTank(activeTank.id, { status: 'INACTIVE' });
   }, /Cannot deactivate tank.*linked to active nozzle/);
 });
 
@@ -314,6 +334,7 @@ test('deleteNozzle blocks deletion when nozzle was dispensed, and allows deletio
     testingLiters: 5,
     grossDispensedLiters: 500,
     netSoldLiters: 495,
+    meterPhotoUrl: 'https://storage.petropulse.io/readings/test_photo.jpg',
   });
 
   // Attempting to delete the dispensed nozzle must throw error per statutory regulations
@@ -361,6 +382,7 @@ test('recordMeterReading blocks reading when net dispensed volume exceeds feeder
       testingLiters: 0,
       grossDispensedLiters: 100,
       netSoldLiters: 100,
+      meterPhotoUrl: 'https://storage.petropulse.io/readings/test_photo.jpg',
     });
   }, /Stock limit exceeded/);
 
@@ -372,6 +394,7 @@ test('recordMeterReading blocks reading when net dispensed volume exceeds feeder
     testingLiters: 0,
     grossDispensedLiters: 40,
     netSoldLiters: 40,
+    meterPhotoUrl: 'https://storage.petropulse.io/readings/test_photo.jpg',
   });
   assert.ok(reading.id);
   const updatedTank = mockStore.getTank(lowTank.id);
@@ -393,6 +416,7 @@ test('recordMeterReading requires exception reason when closing meter is less th
     testingLiters: 0,
     grossDispensedLiters: 500,
     netSoldLiters: 500,
+    meterPhotoUrl: 'https://storage.petropulse.io/readings/test_photo.jpg',
   });
 
   // Attempt rollover reading to 10 without exception reason - should throw
@@ -404,6 +428,7 @@ test('recordMeterReading requires exception reason when closing meter is less th
       testingLiters: 0,
       grossDispensedLiters: 0,
       netSoldLiters: 0,
+      meterPhotoUrl: 'https://storage.petropulse.io/readings/test_photo.jpg',
     });
   }, /is lower than opening meter/);
 
@@ -417,6 +442,7 @@ test('recordMeterReading requires exception reason when closing meter is less th
     netSoldLiters: 0,
     isCorrection: true,
     exceptionReason: 'Totalizer unit replaced due to hardware upgrade',
+    meterPhotoUrl: 'https://storage.petropulse.io/readings/test_photo.jpg',
   });
   assert.ok(rollover.id);
 });
@@ -478,6 +504,38 @@ test('mockStore.closeShift synchronizes nozzle closing meters to nozzle totalize
   const updatedNozzle = mockStore.getNozzle(nozzle.id);
   assert.strictEqual(updatedNozzle.electronicTotalizer, closingReading);
   assert.strictEqual(updatedNozzle.mechanicalTotalizer, closingReading);
+});
+
+test('mockStore.recordMeterReading enforces mandatory meter totalizer photo', () => {
+  const nozzle = mockStore.nozzles[0];
+  const opening = nozzle.electronicTotalizer || 1000;
+  const closing = opening + 50;
+
+  // Missing photoUrl/meterPhotoUrl must throw error
+  assert.throws(
+    () => {
+      mockStore.recordMeterReading({
+        nozzleId: nozzle.id,
+        openingMeter: opening,
+        closingMeter: closing,
+        testingLiters: 0,
+      });
+    },
+    /Meter totalizer photograph is strictly mandatory/
+  );
+
+  // Providing photo succeeds and defaults testingLiters to 0
+  const reading = mockStore.recordMeterReading({
+    nozzleId: nozzle.id,
+    openingMeter: opening,
+    closingMeter: closing,
+    meterPhotoUrl: 'https://storage.petropulse.io/readings/test_totalizer.jpg',
+  });
+
+  assert.strictEqual(reading.testingLiters, 0);
+  assert.strictEqual(reading.meterPhotoUrl, 'https://storage.petropulse.io/readings/test_totalizer.jpg');
+  assert.strictEqual(reading.grossDispensedLiters, 50);
+  assert.strictEqual(reading.netSoldLiters, 50);
 });
 
 

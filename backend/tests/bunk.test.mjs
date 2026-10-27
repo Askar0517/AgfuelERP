@@ -54,6 +54,13 @@ test('GET /api/stations with search and status query parameters', async () => {
   assert.ok(Array.isArray(data));
 });
 
+test('GET /api/stations - unauthenticated request returns 401 Unauthorized', async () => {
+  const res = await fetch(`${baseUrl}/stations`);
+  assert.strictEqual(res.status, 401);
+  const data = await res.json();
+  assert.ok(data.error?.includes('Authentication required'));
+});
+
 // 2. GET /api/stations/next-code
 test('GET /api/stations/next-code - generates formatted bunk code', async () => {
   const res = await fetch(`${baseUrl}/stations/next-code`, {

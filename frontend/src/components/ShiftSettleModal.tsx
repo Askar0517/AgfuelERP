@@ -34,7 +34,7 @@ export const ShiftSettleModal: React.FC<ShiftSettleModalProps> = ({
       endMeter: (nr.endMeter || 0) > (nr.startMeter || nr.openingElectronic || 0)
         ? nr.endMeter
         : Number(((nr.startMeter || nr.openingElectronic || 0) + 250.0).toFixed(1)),
-      testingLiters: nr.testingLiters || 5.0,
+      testingLiters: nr.testingLiters ?? 0,
       rate: nr.rate || fuels.find((f) => f.code === nr.fuelCode)?.ratePerLiter || (isAED ? 3.15 : 100),
     }))
   );

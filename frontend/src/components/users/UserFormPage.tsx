@@ -40,6 +40,29 @@ export interface UserFormPageProps {
   onCancel: () => void;
 }
 
+const COUNTRY_PREFIX_OPTIONS = [
+  { value: '+91', label: '+91 (India)' },
+  { value: '+1', label: '+1 (USA/Canada)' },
+  { value: '+44', label: '+44 (UK)' },
+  { value: '+971', label: '+971 (UAE)' },
+  { value: '+966', label: '+966 (Saudi Arabia)' },
+  { value: '+65', label: '+65 (Singapore)' },
+  { value: '+60', label: '+60 (Malaysia)' },
+  { value: '+974', label: '+974 (Qatar)' },
+  { value: '+968', label: '+968 (Oman)' },
+  { value: '+965', label: '+965 (Kuwait)' },
+  { value: '+973', label: '+973 (Bahrain)' },
+];
+
+const parseInitialPhone = (rawPhone?: string) => {
+  if (!rawPhone) return { prefix: '+91', number: '' };
+  const matched = rawPhone.trim().match(/^(\+\d{1,4})\s*(.*)$/);
+  if (matched) {
+    return { prefix: matched[1], number: matched[2].replace(/\D/g, '') };
+  }
+  return { prefix: '+91', number: rawPhone.replace(/\D/g, '') };
+};
+
 export const UserFormPage: React.FC<UserFormPageProps> = ({
   mode,
   initialUser,
@@ -70,11 +93,15 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
     return [initialUser.stationId || currentStationId || stations[0]?.id || 'st-101'];
   };
 
+  const initialPhoneData = parseInitialPhone(initialUser?.phone);
+
   // Form Fields State
   const [name, setName] = useState(initialUser?.name || '');
   const [email, setEmail] = useState(initialUser?.email || '');
   const [username, setUsername] = useState(initialUser?.username || '');
-  const [phone, setPhone] = useState(initialUser?.phone || '');
+  const [phonePrefix, setPhonePrefix] = useState<string>(initialPhoneData.prefix);
+  const [phoneNumber, setPhoneNumber] = useState<string>(initialPhoneData.number);
+  const [pin, setPin] = useState<string>(mode === 'ADD' ? '1234' : '');
   const [role, setRole] = useState<UserRole>(initialUser?.role || 'ATTENDANT');
   const [status, setStatus] = useState<string>(
     initialUser?.status || (initialUser?.isActive === false ? 'INACTIVE' : 'ACTIVE')
@@ -194,15 +221,18 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
     const cleanName = (name || '').trim();
     const cleanEmail = (email || '').trim();
     const cleanUsername = (username || '').trim();
-    const cleanPhone = (phone || '').trim();
+    const cleanLocalNumber = (phoneNumber || '').trim().replace(/\D/g, '');
+    const fullPhone = cleanLocalNumber ? `${phonePrefix} ${cleanLocalNumber}` : '';
 
     const validation = validateUserForm({
       name: cleanName,
-      email: cleanEmail,
-      username: cleanUsername,
+      email: cleanEmail || undefined,
+      username: cleanUsername || undefined,
       role,
       stationId: primaryStationId,
-      phone: cleanPhone,
+      phone: cleanLocalNumber,
+      phonePrefix,
+      pin: pin ? pin.trim() : undefined,
     });
 
     if (!validation.isValid) {
@@ -225,15 +255,17 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
     const payload = {
       name: cleanName,
       email: cleanEmail || undefined,
-      username: cleanUsername || undefined,
-      phone: cleanPhone || '+91 98000 00000',
+      username: cleanUsername || (cleanLocalNumber ? `staff_${cleanLocalNumber.slice(-4)}` : undefined),
+      phone: fullPhone,
+      pin: pin ? pin.trim() : (mode === 'ADD' ? '1234' : undefined),
+      password: pin ? pin.trim() : (mode === 'ADD' ? '1234' : undefined),
       role,
       status,
       shiftSchedule,
       stationId: primaryStationId || assignedBunks[0] || 'st-101',
       assignedBunks,
       customPermissions: JSON.stringify(permissions),
-      sendInvite: mode === 'ADD' ? sendInvite : undefined,
+      sendInvite: mode === 'ADD' && cleanEmail ? sendInvite : false,
     };
 
     try {
@@ -246,7 +278,7 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-12">
+    <div className="space-y-3.5 animate-fadeIn pb-12">
       {/* Standard Unified Breadcrumbs & Actions Header */}
       <Breadcrumbs
         items={[
@@ -337,10 +369,61 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
               )}
             </div>
 
-            {/* Email Address */}
+            {/* Contact Phone (Mandatory with Country Prefix Dropdown) */}
             <div>
               <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1.5">
-                Email Address <span className="text-rose-500">*</span>
+                Contact Mobile Number <span className="text-rose-500">*</span>
+              </label>
+              <div className="flex gap-2">
+                <div className="w-32 shrink-0">
+                  <select
+                    value={phonePrefix}
+                    onChange={(e) => {
+                      setPhonePrefix(e.target.value);
+                      if (fieldErrors.phone) setFieldErrors((p) => ({ ...p, phone: '' }));
+                    }}
+                    className="w-full px-2 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-hidden"
+                  >
+                    {COUNTRY_PREFIX_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="relative flex-1">
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={phoneNumber}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setPhoneNumber(val);
+                      if (fieldErrors.phone) setFieldErrors((p) => ({ ...p, phone: '' }));
+                    }}
+                    maxLength={phonePrefix === '+91' || phonePrefix === '+1' || phonePrefix === '+44' ? 10 : 15}
+                    placeholder={phonePrefix === '+91' ? '10-digit mobile number' : 'Mobile number'}
+                    className={`w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border font-mono text-slate-900 dark:text-slate-100 focus:outline-hidden ${
+                      fieldErrors.phone
+                        ? 'border-rose-500 ring-2 ring-rose-500/20'
+                        : 'border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-emerald-500/30'
+                    }`}
+                  />
+                </div>
+              </div>
+              {fieldErrors.phone ? (
+                <p className="mt-1 text-[11px] text-rose-500 font-medium">{fieldErrors.phone}</p>
+              ) : (
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Mandatory contact number. Used for mobile attendant authentication & SMS alerts.
+                </p>
+              )}
+            </div>
+
+            {/* Email Address (Optional) */}
+            <div>
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1.5">
+                Email Address <span className="text-slate-400 font-normal">(Optional)</span>
               </label>
               <input
                 type="email"
@@ -350,15 +433,19 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
                   setEmail(e.target.value);
                   if (fieldErrors.email) setFieldErrors((p) => ({ ...p, email: '' }));
                 }}
-                placeholder="e.g. vikram@petropulse.io"
+                placeholder="e.g. vikram@petropulse.io (optional)"
                 className={`w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border text-slate-900 dark:text-slate-100 focus:outline-hidden ${
                   fieldErrors.email
                     ? 'border-rose-500 ring-2 ring-rose-500/20'
                     : 'border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-emerald-500/30'
                 }`}
               />
-              {fieldErrors.email && (
+              {fieldErrors.email ? (
                 <p className="mt-1 text-[11px] text-rose-500 font-medium">{fieldErrors.email}</p>
+              ) : (
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Optional. Staff without email can log in with Mobile Number & PIN.
+                </p>
               )}
             </div>
 
@@ -387,28 +474,48 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
               )}
             </div>
 
-            {/* Contact Phone */}
+            {/* Forecourt Security PIN (Default: 1234) */}
             <div>
-              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1.5">
-                Contact Phone Number
-              </label>
-              <input
-                type="tel"
-                name="phone"
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value);
-                  if (fieldErrors.phone) setFieldErrors((p) => ({ ...p, phone: '' }));
-                }}
-                placeholder="e.g. +91 98765 43210"
-                className={`w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border text-slate-900 dark:text-slate-100 focus:outline-hidden ${
-                  fieldErrors.phone
-                    ? 'border-rose-500 ring-2 ring-rose-500/20'
-                    : 'border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-emerald-500/30'
-                }`}
-              />
-              {fieldErrors.phone && (
-                <p className="mt-1 text-[11px] text-rose-500 font-medium">{fieldErrors.phone}</p>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-slate-700 dark:text-slate-300 font-semibold">
+                  Forecourt Security PIN <span className="text-rose-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setPin('1234')}
+                  className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:underline font-semibold"
+                >
+                  Set Default 1234
+                </button>
+              </div>
+              <div className="relative">
+                <KeyRound className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  name="pin"
+                  maxLength={6}
+                  value={pin}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setPin(val);
+                    if (fieldErrors.pin) setFieldErrors((p) => ({ ...p, pin: '' }));
+                  }}
+                  placeholder={mode === 'EDIT' ? 'Enter new 4-digit PIN (leave empty to keep current)' : '4-digit PIN (default 1234)'}
+                  className={`w-full pl-8 pr-3 py-2 rounded-xl bg-white dark:bg-slate-800 border font-mono text-slate-900 dark:text-slate-100 focus:outline-hidden ${
+                    fieldErrors.pin
+                      ? 'border-rose-500 ring-2 ring-rose-500/20'
+                      : 'border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-emerald-500/30'
+                  }`}
+                />
+              </div>
+              {fieldErrors.pin ? (
+                <p className="mt-1 text-[11px] text-rose-500 font-medium">{fieldErrors.pin}</p>
+              ) : (
+                <p className="mt-1 text-[10px] text-slate-400">
+                  {mode === 'EDIT'
+                    ? 'Leave empty to keep current PIN, or enter a new 4 to 6 digit numeric code.'
+                    : 'Temporary PIN for forecourt mobile terminal access (Default: 1234).'}
+                </p>
               )}
             </div>
 
@@ -439,26 +546,25 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
             <Shield className="w-5 h-5 text-emerald-600" />
             <div>
               <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                2. Role & Forecourt Station Assignment
+                2. Role & Station Assignment
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Select authoritative role and assign the forecourt bunks this user has clearance to operate.
+                Assign role and station access.
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Authoritative Role Single-Select Dropdown */}
+            {/* Role Dropdown */}
             <div>
               <SelectDropdown
-                label="Assigned System Role"
-                placeholder="Choose authoritative user role..."
+                label="System Role"
+                placeholder="Select role..."
                 options={roleOptions}
                 value={role}
                 onChange={(val) => setRole(val as UserRole)}
                 searchable={true}
                 required
-                helpText="All system roles are retrieved from authoritative configuration. Manager accounts are restricted from assigning elevated Owner roles."
               />
             </div>
 
@@ -467,18 +573,17 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
               {role === 'OWNER' ? (
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                    Assigned Bunk Stations
+                    Assigned Stations
                   </label>
                   <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 text-xs">
-                    <strong className="block font-semibold">Universal Forecourt Access</strong>
-                    Super Admins (Owners) automatically possess cross-station access to all bunks,
-                    tanks, dispensers, and financial ledgers.
+                    <strong className="block font-semibold">Universal Access</strong>
+                    Owners have access to all bunk stations and financial ledgers.
                   </div>
                 </div>
               ) : (
                 <MultiSelectDropdown
-                  label="Assigned Bunk Station(s)"
-                  placeholder="Select station(s) to grant access..."
+                  label="Assigned Stations"
+                  placeholder="Select stations..."
                   options={bunkOptions}
                   value={assignedBunks}
                   onChange={(bunks) => {
@@ -490,7 +595,6 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
                   error={fieldErrors.assignedBunks}
                   required
                   searchable={true}
-                  helpText="Forecourt operators and Bunk Managers can only manage assigned bunk station records."
                 />
               )}
             </div>
@@ -500,13 +604,12 @@ export const UserFormPage: React.FC<UserFormPageProps> = ({
           {role !== 'OWNER' && assignedBunks.length > 1 && (
             <div className="max-w-md pt-2">
               <SelectDropdown
-                label="Primary Default Bunk"
-                placeholder="Choose primary active station..."
+                label="Default Station"
+                placeholder="Select default station..."
                 options={bunkOptions.filter((b) => assignedBunks.includes(b.value))}
                 value={primaryStationId}
                 onChange={(stId) => setPrimaryStationId(stId)}
                 searchable={false}
-                helpText="Default landing station when user signs into forecourt mobile POS or workstation."
               />
             </div>
           )}

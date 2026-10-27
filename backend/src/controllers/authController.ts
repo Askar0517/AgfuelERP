@@ -1,11 +1,12 @@
 import { Request, Response } from 'express';
 import { dbService } from '../db/service.ts';
-import { activeSessions, revokedTokens, isRateLimited } from '../middleware/auth.ts';
+import { activeSessions, revokedTokens, isRateLimited, clearRateLimit } from '../middleware/auth.ts';
 
 export const authController = {
   login: async (req: Request, res: Response) => {
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    if (isRateLimited(`login_${ip}`, 12)) {
+    const limitKey = `login_${ip}`;
+    if (isRateLimited(limitKey)) {
       return res.status(429).json({ error: 'Too many login attempts. Please wait 15 minutes before trying again.' });
     }
 
@@ -13,6 +14,7 @@ export const authController = {
       const { usernameOrEmail, username, email, password } = req.body || {};
       const identifier = usernameOrEmail || username || email;
       const result = await dbService.login(identifier, password);
+      clearRateLimit(limitKey);
       revokedTokens.delete(result.token);
       activeSessions.set(result.token, {
         userId: result.user.id,

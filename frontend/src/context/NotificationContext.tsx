@@ -24,6 +24,9 @@ interface NotifyOptions {
   duration?: number;
   category?: NotificationCategory;
   link?: string;
+  stationId?: string;
+  targetRole?: any;
+  userId?: string;
   action?: {
     label: string;
     onClick: () => void;
@@ -67,74 +70,8 @@ const DURATION_MAP: Record<NotificationType, number> = {
 
 const STORAGE_KEY = 'petropulse_notifications_v2';
 
-// Realistic starter forecourt notifications if none exist
-const DEFAULT_STORED_NOTIFICATIONS: StoredNotification[] = [
-  {
-    id: 'stored-notif-01',
-    type: 'warning',
-    title: 'Low Tank Volume Alert: Tank #02',
-    message: 'Octane 95 is currently at 18.4% capacity (2,750 L remaining). Below critical replenishment threshold of 3,500 L.',
-    category: 'inventory',
-    timestamp: Date.now() - 12 * 60 * 1000,
-    read: false,
-    link: '/tanks',
-    actionLabel: 'View Tank #02',
-  },
-  {
-    id: 'stored-notif-02',
-    type: 'success',
-    title: 'Shift Settle Reconciled: SH-001',
-    message: 'Attendant Suresh Kumar closed morning shift with ₹48,250 cash submitted. Balanced with zero cash shortage.',
-    category: 'operations',
-    timestamp: Date.now() - 48 * 60 * 1000,
-    read: false,
-    link: '/shifts',
-    actionLabel: 'Review Shifts',
-  },
-  {
-    id: 'stored-notif-03',
-    type: 'info',
-    title: 'Forecourt Pricing Synchronized',
-    message: 'Live forecourt pricing synchronized: 98 Oct ₹112.50, 95 Oct ₹104.25, Diesel ₹92.80.',
-    category: 'rates',
-    timestamp: Date.now() - 2 * 3600 * 1000,
-    read: true,
-    link: '/dashboard',
-    actionLabel: 'Forecourt Rates',
-  },
-  {
-    id: 'stored-notif-04',
-    type: 'live',
-    title: 'IoT Forecourt Telemetry Online',
-    message: 'Wayne Dresser ATG probes and electronic totalizers reporting healthy sensor telemetry.',
-    category: 'system',
-    timestamp: Date.now() - 4 * 3600 * 1000,
-    read: true,
-    link: '/dashboard',
-  },
-  {
-    id: 'stored-notif-05',
-    type: 'success',
-    title: 'Decanting Batch Verified: Tanker DL-01-AB-1234',
-    message: 'Received 12,000 L Octane 98. Density confirmed 0.742 g/cc within ASTM-15C standard.',
-    category: 'operations',
-    timestamp: Date.now() - 7 * 3600 * 1000,
-    read: true,
-    link: '/bunks',
-    actionLabel: 'Decanting Log',
-  },
-  {
-    id: 'stored-notif-06',
-    type: 'info',
-    title: 'Security & PBKDF2 Audit Verified',
-    message: 'Administrator session authenticated for station BUNK-000001 (Metro Central Forecourt).',
-    category: 'security',
-    timestamp: Date.now() - 10 * 3600 * 1000,
-    read: true,
-    link: '/profile',
-    actionLabel: 'Audit Profile',
-  },
-];
+// Empty default: only authentic live system actions will generate notifications
+const DEFAULT_STORED_NOTIFICATIONS: StoredNotification[] = [];
 
 const deriveCategory = (type: NotificationType, title: string, message?: string): NotificationCategory => {
   const text = `${title} ${message || ''}`.toLowerCase();
@@ -151,13 +88,20 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_STORED_NOTIFICATIONS));
-        return DEFAULT_STORED_NOTIFICATIONS;
+        return [];
       }
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_STORED_NOTIFICATIONS;
+      if (Array.isArray(parsed)) {
+        // Strip out legacy static dummy items (e.g. stored-notif-01 through 06)
+        const cleaned = parsed.filter((n: any) => !n.id?.startsWith('stored-notif-0'));
+        if (cleaned.length !== parsed.length) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+        }
+        return cleaned;
+      }
+      return [];
     } catch {
-      return DEFAULT_STORED_NOTIFICATIONS;
+      return [];
     }
   });
 
@@ -248,14 +192,25 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const notify = useCallback(
     (type: NotificationType, title: string, options?: NotifyOptions): string => {
       const now = Date.now();
-      const dedupKey = `${type}::${title}::${options?.message || ''}`;
+      const rawMsg = (options?.message || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const rawTitle = title.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const dedupKey = `${type}::${rawTitle}::${rawMsg}`;
       const lastSeen = recentMapRef.current.get(dedupKey);
 
-      // Prevent exact duplicate notifications within 2.5 seconds
-      if (lastSeen && now - lastSeen < 2500) {
+      // Prevent exact duplicate notifications within 3 seconds
+      if (lastSeen && now - lastSeen < 3000) {
         return '';
       }
       recentMapRef.current.set(dedupKey, now);
+
+      // Prevent redundant notifications by message content within 2.5 seconds (e.g. parent + child firing simultaneously)
+      if (rawMsg.length > 5) {
+        const lastMsgSeen = recentMapRef.current.get(`msg::${rawMsg}`);
+        if (lastMsgSeen && now - lastMsgSeen < 2500) {
+          return '';
+        }
+        recentMapRef.current.set(`msg::${rawMsg}`, now);
+      }
 
       // Generate unique ID
       const id = `notif-${now}-${Math.random().toString(36).substring(2, 7)}`;
@@ -288,6 +243,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         read: false,
         link: options?.link,
         actionLabel: options?.action?.label,
+        stationId: options?.stationId,
+        targetRole: options?.targetRole,
+        userId: options?.userId,
       };
       setStoredNotifications((prev) => {
         const updated = [storedItem, ...prev.filter((n) => n.title !== title || now - n.timestamp > 4000)];

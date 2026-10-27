@@ -11,7 +11,7 @@ export interface CurrencyConfig {
 export const SUPPORTED_CURRENCIES: Record<string, CurrencyConfig> = {
   INR: {
     code: 'INR',
-    symbol: '\u20B9',
+    symbol: '₹',
     name: 'Indian Rupee',
     locale: 'en-IN',
     decimals: 2,
@@ -32,7 +32,7 @@ export const SUPPORTED_CURRENCIES: Record<string, CurrencyConfig> = {
   },
   EUR: {
     code: 'EUR',
-    symbol: '\u20AC',
+    symbol: '€',
     name: 'Euro',
     locale: 'de-DE',
     decimals: 2,

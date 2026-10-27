@@ -59,10 +59,10 @@ export const AddTankModal: React.FC<AddTankModalProps> = ({
     tankIdentifier: initialIdentity,
     name: initialIdentity,
     fuelCode: defaultFuelCode,
-    capacityLiters: '0',
-    openingStockLiters: '0',
-    lowThresholdLiters: '0',
-    safeCapacityLiters: '0',
+    capacityLiters: '',
+    openingStockLiters: '',
+    lowThresholdLiters: '',
+    safeCapacityLiters: '',
     location: '',
     description: '',
   });
@@ -84,10 +84,10 @@ export const AddTankModal: React.FC<AddTankModalProps> = ({
       tankIdentifier: nextId,
       name: nextId,
       fuelCode: initialCode,
-      capacityLiters: '0',
-      openingStockLiters: '0',
-      lowThresholdLiters: '0',
-      safeCapacityLiters: '0',
+      capacityLiters: '',
+      openingStockLiters: '',
+      lowThresholdLiters: '',
+      safeCapacityLiters: '',
       location: '',
       description: '',
     });
@@ -118,13 +118,13 @@ export const AddTankModal: React.FC<AddTankModalProps> = ({
   // Safe filling calculated based on capacity (95% safe capacity, 15% lower stock)
   const handleCapacityChange = (capStr: string) => {
     const cap = parseFloat(capStr) || 0;
-    const safe = Math.round(cap * 0.95);
-    const low = Math.round(cap * 0.15);
+    const safe = cap > 0 ? Math.round(cap * 0.95) : 0;
+    const low = cap > 0 ? Math.round(cap * 0.15) : 0;
     setFormData((prev) => ({
       ...prev,
       capacityLiters: capStr,
-      safeCapacityLiters: String(safe),
-      lowThresholdLiters: String(low),
+      safeCapacityLiters: safe > 0 ? String(safe) : '',
+      lowThresholdLiters: low > 0 ? String(low) : '',
     }));
 
     // Auto-clear capacity or safe capacity errors if resolved
@@ -285,85 +285,48 @@ export const AddTankModal: React.FC<AddTankModalProps> = ({
         {/* Form Body - Scrollable Container */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4.5 text-xs">
-            {/* Synchronized Tank Identity Banner with Parent Bunk Info */}
-            <div className="p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shrink-0">
-                  <Layers className="h-4 w-4" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
-                      Synchronized Tank Identity
-                    </span>
-                    <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                      Auto-Synced
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Tank Number, Tank Identifier, and Tank Name are unified to prevent forecourt mismatch.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Assigned ID:</span>
-                <span className="font-mono font-bold text-xs px-2.5 py-1 rounded-lg bg-emerald-600 text-white shadow-xs">
-                  Tank #{formData.tankNumber || '—'}
-                </span>
-              </div>
+            {/* Tank Identity Tag */}
+            <div className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 flex items-center justify-between">
+              <span className="text-xs text-slate-500 dark:text-slate-400">Assigned Tank Number:</span>
+              <span className="font-mono font-bold text-xs px-2.5 py-1 rounded-lg bg-emerald-600 text-white shadow-xs">
+                Tank #{formData.tankNumber || '—'}
+              </span>
             </div>
 
             {/* 2-Column Form Fields Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3.5 text-xs">
               {/* Row 1 - Left: Tank Number & Name */}
               <div>
-                <div className="flex items-center justify-between h-5 mb-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Tank Number & Name <span className="text-rose-500">*</span>
-                  </label>
-                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                    Unique #
-                  </span>
-                </div>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={formData.tankNumber}
-                    onChange={(e) => handleIdentityChange(e.target.value)}
-                    required
-                    placeholder="e.g. 1"
-                    aria-invalid={Boolean(fieldErrors.tankNumber)}
-                    className={`w-full h-10 px-3.5 py-2 rounded-xl border text-xs font-mono font-bold transition-all ${
-                      fieldErrors.tankNumber
-                        ? 'border-rose-500 bg-rose-50/20 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100 focus:ring-2 focus:ring-rose-500'
-                        : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
-                    }`}
-                  />
-                </div>
-                <div className="min-h-[16px] mt-1">
-                  {fieldErrors.tankNumber ? (
-                    <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3 shrink-0" />
-                      {fieldErrors.tankNumber}
-                    </p>
-                  ) : (
-                    <p className="text-[11px] text-slate-400">
-                      Auto-assigned unique number & name for this bunk.
-                    </p>
-                  )}
-                </div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Tank Number <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={formData.tankNumber}
+                  onChange={(e) => handleIdentityChange(e.target.value)}
+                  required
+                  placeholder="e.g. 1"
+                  aria-invalid={Boolean(fieldErrors.tankNumber)}
+                  className={`w-full h-10 px-3.5 py-2 rounded-xl border text-xs font-mono font-bold transition-all ${
+                    fieldErrors.tankNumber
+                      ? 'border-rose-500 bg-rose-50/20 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100 focus:ring-2 focus:ring-rose-500'
+                      : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
+                  }`}
+                />
+                {fieldErrors.tankNumber && (
+                  <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    {fieldErrors.tankNumber}
+                  </p>
+                )}
               </div>
 
               {/* Row 1 - Right: Fuel Product Grade */}
               <div>
-                <div className="flex items-center justify-between h-5 mb-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Fuel Product Grade <span className="text-rose-500">*</span>
-                  </label>
-                  <span className="text-[10px] text-slate-400 font-medium">
-                    Forecourt Fuel
-                  </span>
-                </div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Fuel Grade <span className="text-rose-500">*</span>
+                </label>
                 <SelectDropdown
                   value={formData.fuelCode}
                   onChange={(val) => {
@@ -381,37 +344,23 @@ export const AddTankModal: React.FC<AddTankModalProps> = ({
                   placeholder="Select fuel grade..."
                   error={fieldErrors.fuelCode}
                 />
-                <div className="min-h-[16px] mt-1">
-                  {fieldErrors.fuelCode ? (
-                    <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3 shrink-0" />
-                      {fieldErrors.fuelCode}
-                    </p>
-                  ) : (
-                    <p className="text-[11px] text-slate-400">
-                      Fuel product grade stored in this subterranean vessel.
-                    </p>
-                  )}
-                </div>
               </div>
 
               {/* Row 2 - Left: Total Physical Capacity */}
               <div>
-                <div className="flex items-center justify-between h-5 mb-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Total Capacity (Litres) <span className="text-rose-500">*</span>
-                  </label>
-                  <span className="text-[10px] text-slate-400">Physical Gross</span>
-                </div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Total Capacity (Litres) <span className="text-rose-500">*</span>
+                </label>
                 <div className="relative">
                   <input
                     type="number"
+                    inputMode="numeric"
                     min={0}
                     step="any"
                     value={formData.capacityLiters}
                     onChange={(e) => handleCapacityChange(e.target.value)}
                     required
-                    placeholder="0"
+                    placeholder="e.g. 20000"
                     aria-invalid={Boolean(fieldErrors.capacityLiters)}
                     className={`w-full h-10 pl-3.5 pr-8 py-2 rounded-xl border text-xs font-mono font-semibold transition-all ${
                       fieldErrors.capacityLiters
@@ -423,31 +372,23 @@ export const AddTankModal: React.FC<AddTankModalProps> = ({
                     L
                   </span>
                 </div>
-                <div className="min-h-[16px] mt-1">
-                  {fieldErrors.capacityLiters ? (
-                    <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3 shrink-0" />
-                      {fieldErrors.capacityLiters}
-                    </p>
-                  ) : (
-                    <p className="text-[11px] text-slate-400">
-                      Calibrated physical shell volume (must be &gt; 0).
-                    </p>
-                  )}
-                </div>
+                {fieldErrors.capacityLiters && (
+                  <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    {fieldErrors.capacityLiters}
+                  </p>
+                )}
               </div>
 
               {/* Row 2 - Right: Opening Stock */}
               <div>
-                <div className="flex items-center justify-between h-5 mb-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Opening Stock (Litres) <span className="text-rose-500">*</span>
-                  </label>
-                  <span className="text-[10px] text-slate-400">Initial Dip / Stock</span>
-                </div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Opening Stock (Litres) <span className="text-rose-500">*</span>
+                </label>
                 <div className="relative">
                   <input
                     type="number"
+                    inputMode="numeric"
                     min={0}
                     step="any"
                     value={formData.openingStockLiters}
@@ -465,31 +406,19 @@ export const AddTankModal: React.FC<AddTankModalProps> = ({
                     L
                   </span>
                 </div>
-                <div className="min-h-[16px] mt-1">
-                  {fieldErrors.openingStockLiters ? (
-                    <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3 shrink-0" />
-                      {fieldErrors.openingStockLiters}
-                    </p>
-                  ) : (
-                    <p className="text-[11px] text-slate-400">
-                      Starting inventory (default 0 L for empty tank initialization).
-                    </p>
-                  )}
-                </div>
+                {fieldErrors.openingStockLiters && (
+                  <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    {fieldErrors.openingStockLiters}
+                  </p>
+                )}
               </div>
 
               {/* Row 3 - Left: Safe Filling Capacity (95%) */}
               <div>
-                <div className="flex items-center justify-between h-5 mb-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <span>Safe Filling Capacity</span>
-                    <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 font-bold">(95%)</span>
-                  </label>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                    <Lock className="h-2.5 w-2.5" /> Locked
-                  </span>
-                </div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Safe Capacity (95%)
+                </label>
                 <div className="relative">
                   <input
                     type="number"
@@ -502,32 +431,23 @@ export const AddTankModal: React.FC<AddTankModalProps> = ({
                     L
                   </span>
                 </div>
-                <div className="min-h-[16px] mt-1">
-                  {fieldErrors.safeCapacityLiters ? (
-                    <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3 shrink-0" />
-                      {fieldErrors.safeCapacityLiters}
-                    </p>
-                  ) : (
-                    <p className="text-[11px] text-slate-400">
-                      Auto-calculated: 95% of capacity (5% expansion buffer).
-                    </p>
-                  )}
-                </div>
+                {fieldErrors.safeCapacityLiters && (
+                  <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    {fieldErrors.safeCapacityLiters}
+                  </p>
+                )}
               </div>
 
               {/* Row 3 - Right: Lower Stock Alert Threshold (15%) */}
               <div>
-                <div className="flex items-center justify-between h-5 mb-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <span>Low Stock Alert</span>
-                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">(15%)</span>
-                  </label>
-                  <span className="text-[10px] text-slate-400 font-medium">Re-order Alert</span>
-                </div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Low Stock Alert (15%)
+                </label>
                 <div className="relative">
                   <input
                     type="number"
+                    inputMode="numeric"
                     min={0}
                     step="any"
                     value={formData.lowThresholdLiters}
@@ -543,28 +463,19 @@ export const AddTankModal: React.FC<AddTankModalProps> = ({
                     L
                   </span>
                 </div>
-                <div className="min-h-[16px] mt-1">
-                  {fieldErrors.lowThresholdLiters ? (
-                    <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3 shrink-0" />
-                      {fieldErrors.lowThresholdLiters}
-                    </p>
-                  ) : (
-                    <p className="text-[11px] text-slate-400">
-                      Triggers low stock re-order alert at or below this level.
-                    </p>
-                  )}
-                </div>
+                {fieldErrors.lowThresholdLiters && (
+                  <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    {fieldErrors.lowThresholdLiters}
+                  </p>
+                )}
               </div>
 
               {/* Row 4: Full-Width Location / Chamber Description */}
               <div className="sm:col-span-2">
-                <div className="flex items-center justify-between h-5 mb-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Location / Chamber Description <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <span className="text-[10px] text-slate-400">Pit Identifier</span>
-                </div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Location / Chamber Description <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
                 <input
                   type="text"
                   value={formData.location}
@@ -572,9 +483,6 @@ export const AddTankModal: React.FC<AddTankModalProps> = ({
                   placeholder="e.g. Forecourt East Pit, Chamber #1"
                   className="w-full h-10 px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                 />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Physical tank pit location or chamber identifier on the forecourt.
-                </p>
               </div>
             </div>
 

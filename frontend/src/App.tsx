@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, Routes, Route, Navigate } from 'react-router-dom';
 import { api, setActiveRoleHeader, getAuthToken, setAuthToken } from './api/client';
 import {
@@ -38,6 +38,7 @@ import { BunksView } from './views/BunksView';
 import { NozzlesView } from './views/NozzlesView';
 import { UsersView } from './views/UsersView';
 import { TanksView } from './views/TanksView';
+import { DecantView } from './views/DecantView';
 import { ManualMeterForm } from './components/meters/ManualMeterForm';
 import { ShiftsView } from './views/ShiftsView';
 import { EODSchedulerPanel } from './components/scheduler/EODSchedulerPanel';
@@ -88,7 +89,12 @@ function AppContent() {
   const activeTab = currentPathSegment === 'login' ? 'dashboard' : currentPathSegment;
   const handleSelectTab = (tab: string) => navigate(`/${tab}`);
 
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 1280;
+    }
+    return false;
+  });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -110,15 +116,6 @@ function AppContent() {
   const showToast = (msg: string) => {
     notifySuccess('System Notification', msg);
   };
-
-  // Live telemetry notification
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const timer = setTimeout(() => {
-      notifyLive('Forecourt Telemetry Live', 'IoT sensors, automated tank gauging, and dispensers connected.');
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [isAuthenticated, notifyLive]);
 
   // Session verification on mount
   useEffect(() => {
@@ -258,19 +255,102 @@ function AppContent() {
     }
   }, [isAuthenticated, loadData]);
 
+  // Synchronize station-specific fuels when active station changes
+  useEffect(() => {
+    if (isAuthenticated && currentStationId) {
+      api.getFuels(currentStationId)
+        .then((res) => {
+          if (res && res.length > 0) setFuels(res);
+        })
+        .catch(() => {});
+    }
+  }, [currentStationId, isAuthenticated]);
+
+  // Lock tablet/mobile window from rubber-banding when scrolling reaches boundaries
+  useEffect(() => {
+    let startY = 0;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        startY = e.touches[0].clientY;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const currentY = e.touches[0].clientY;
+      const deltaY = currentY - startY;
+
+      // Find nearest scrollable container
+      let el = e.target as HTMLElement | null;
+      let scrollableContainer: HTMLElement | null = null;
+
+      while (el && el !== document.body && el !== document.documentElement) {
+        const style = window.getComputedStyle(el);
+        const overflowY = style.overflowY;
+        if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+          scrollableContainer = el;
+          break;
+        }
+        el = el.parentElement;
+      }
+
+      if (!scrollableContainer) {
+        // Dragging on header, footer, or static area -> prevent whole page pull
+        if (e.cancelable) e.preventDefault();
+        return;
+      }
+
+      // Check boundary limits
+      const { scrollTop, scrollHeight, clientHeight } = scrollableContainer;
+      const isAtTop = scrollTop <= 0;
+      const isAtBottom = Math.ceil(scrollTop + clientHeight) >= scrollHeight - 1;
+
+      // If at top and dragging DOWN (deltaY > 0), prevent rubber-band pull
+      if (isAtTop && deltaY > 0) {
+        if (e.cancelable) e.preventDefault();
+      }
+      // If at bottom and dragging UP (deltaY < 0), prevent rubber-band pull
+      else if (isAtBottom && deltaY < 0) {
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+
+    const handleScroll = () => {
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
   // Handlers
   const handleRecordDip = async (tankId: string, dipCm: number, waterDipCm: number) => {
     const updatedTank = await api.recordDip(tankId, dipCm, waterDipCm);
     setTanks((prev) => prev.map((t) => (t.id === tankId ? updatedTank : t)));
-    showToast(`Tank #${updatedTank.tankNumber} dip recorded: ${updatedTank.currentVolumeLiters.toLocaleString()} L`);
+    notifySuccess('Tank Dip Recorded', `Tank #${updatedTank.tankNumber} dip recorded: ${updatedTank.currentVolumeLiters.toLocaleString()} L`);
   };
 
   const handleDecantLoad = async (payload: any) => {
     if (!activeDecantTank) return;
-    const { tank, loadRecord } = await api.decantLoad(activeDecantTank.id, payload);
+    const { tank, loadRecord } = await api.decantLoad(activeDecantTank.id, {
+      ...payload,
+      stationId: payload.stationId || activeDecantTank.stationId,
+      operatorName: payload.operatorName || currentUser?.name || userProfile?.name || 'Administrator',
+    });
     setTanks((prev) => prev.map((t) => (t.id === tank.id ? tank : t)));
     setTankLoads((prev) => [loadRecord, ...prev]);
-    showToast(
+    notifySuccess(
+      'Decanting Verified',
       `Decanted ${loadRecord.receivedVolumeLiters.toLocaleString()}L from tanker ${loadRecord.tankerNumber} (${loadRecord.densityStatus})`
     );
   };
@@ -278,11 +358,12 @@ function AppContent() {
   const handleManualMeterReading = async (payload: any) => {
     const reading = await api.recordMeterReading(payload);
     setReadings((prev) => [reading, ...prev]);
-    // Refresh tanks, dispensers, and nozzles to prevent concurrency and stale reading conflicts
-    const [updatedTanks, updatedDisps, updatedNozzles] = await Promise.all([
+    // Refresh tanks, dispensers, nozzles, and shifts to prevent concurrency and stale reading conflicts
+    const [updatedTanks, updatedDisps, updatedNozzles, updatedShifts] = await Promise.all([
       api.getTanks(currentStationId).catch(() => []),
       api.getDispensers(currentStationId).catch(() => []),
       api.getNozzles({ stationId: currentStationId }).catch(() => []),
+      api.getShifts(currentStationId).catch(() => []),
     ]);
     if (updatedTanks.length > 0) setTanks(updatedTanks);
     if (updatedDisps.length > 0) setDispensers(updatedDisps);
@@ -297,9 +378,8 @@ function AppContent() {
         )
       );
     }
-    showToast(
-      `Meter reading logged! Sold: ${reading.netSoldLiters}L · Revenue: ₹${reading.netSalesAmount.toLocaleString()}`
-    );
+    if (updatedShifts && updatedShifts.length > 0) setShifts(updatedShifts);
+    // ManualMeterForm itself triggers notifySuccess('Meter Reading Logged', ...)
   };
 
   const handleSettleShift = async (shiftId: string, payload: any) => {
@@ -314,26 +394,39 @@ function AppContent() {
     if (updatedDisps.length > 0) setDispensers(updatedDisps);
     if (updatedNozzles.length > 0) setNozzles(updatedNozzles);
     if (updatedTanks.length > 0) setTanks(updatedTanks);
-    showToast(
-      `Shift settled! Cash: ₹${settled.cashSubmitted.toLocaleString()} (Variance: ₹${settled.shortageExcess})`
+    notifySuccess(
+      'Shift Settled',
+      `Cash: ₹${settled.cashSubmitted.toLocaleString()} (Variance: ₹${settled.shortageExcess})`
     );
   };
 
   const handleOpenShift = async (payload: any) => {
     const newShift = await api.createShift(payload);
     setShifts((prev) => [newShift, ...prev]);
-    showToast(`Shift ${newShift.shiftCode} created for ${newShift.attendantName}`);
+    notifySuccess('Shift Assigned', `Shift ${newShift.shiftCode} created for ${newShift.attendantName}`);
   };
 
-  const handleUpdateFuelRates = async (rates: Record<string, number>) => {
+  const handleUpdateFuelRates = async (rates: Record<string, number>, targetStationId?: string | null) => {
     for (const [code, rate] of Object.entries(rates)) {
       if (typeof rate === 'number' && !isNaN(rate) && rate > 0) {
-        await api.updateFuelRate(code, rate);
+        await api.updateFuelRate(code, rate, targetStationId);
       }
     }
-    const updatedFuels = await api.getFuels();
+    const updatedFuels = await api.getFuels(currentStationId);
     setFuels(updatedFuels);
-    showToast('Fuel rates successfully updated in PostgreSQL database.');
+    notifySuccess(
+      'Fuel Rates Updated',
+      targetStationId
+        ? `Fuel rates updated for station ${targetStationId}.`
+        : 'Global base fuel rates updated across all bunks.'
+    );
+  };
+
+  const handleResetStationFuelRate = async (fuelCode: string, stationId: string) => {
+    await api.resetFuelRate(fuelCode, stationId);
+    const updatedFuels = await api.getFuels(currentStationId);
+    setFuels(updatedFuels);
+    notifySuccess('Fuel Rate Reset', `Station ${stationId} reverted to global base price for ${fuelCode}.`);
   };
 
   const handleRunEODClose = async (payload: any) => {
@@ -378,28 +471,29 @@ function AppContent() {
     } catch {
       // Non-critical background refresh
     }
-    showToast('Your profile information was updated successfully!');
   };
 
   // Bunk Handlers
   const handleCreateBunk = async (payload: any) => {
     const newBunk = await api.createStation(payload);
     setStations((prev) => [...prev, newBunk]);
+    setCurrentStationId(newBunk.id);
     const updatedDisps = await api.getDispensers();
     setDispensers(updatedDisps);
-    showToast(`Bunk "${newBunk.name}" (${newBunk.code}) created successfully!`);
+    notifySuccess('Bunk Created', `Bunk "${newBunk.name}" (${newBunk.code}) created successfully!`);
+    return newBunk;
   };
 
   const handleUpdateBunk = async (id: string, payload: any) => {
     const updated = await api.updateStation(id, payload);
     setStations((prev) => prev.map((s) => (s.id === id ? updated : s)));
-    showToast(`Bunk "${updated.name}" updated successfully.`);
+    notifySuccess('Bunk Updated', `Bunk "${updated.name}" updated successfully.`);
   };
 
   const handleDeactivateBunk = async (id: string) => {
     const updated = await api.deactivateStation(id);
     setStations((prev) => prev.map((s) => (s.id === id ? updated : s)));
-    showToast(`Bunk "${updated.name}" is now ${updated.status}.`);
+    notifySuccess('Bunk Status Changed', `Bunk "${updated.name}" is now ${updated.status}.`);
   };
 
   const handleDeleteBunk = async (id: string) => {
@@ -409,7 +503,7 @@ function AppContent() {
       const remaining = stations.filter((s) => s.id !== id);
       if (remaining.length > 0) setCurrentStationId(remaining[0].id);
     }
-    showToast('Bunk permanently deleted.');
+    // BunksView already triggers notifySuccess('Bunk Deleted', ...)
   };
 
   // Tank Handlers
@@ -419,25 +513,25 @@ function AppContent() {
       created = await api.createTank(payloadOrTank);
     }
     setTanks((prev) => [...prev.filter((t) => t.id !== created.id), created]);
-    showToast(`Tank "${created.name || created.id}" added successfully!`);
+    // AddTankModal already triggers notifySuccess('Tank Created', ...)
   };
 
   const handleUpdateTank = async (id: string, payload: any) => {
     const updated = await api.updateTank(id, payload);
     setTanks((prev) => prev.map((t) => (t.id === id ? updated : t)));
-    showToast(`Tank "${updated.name || updated.id}" configuration updated.`);
+    // TankDetailsModal already triggers notifySuccess('Configuration Updated', ...)
   };
 
   const handleDeactivateTank = async (id: string, status?: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE') => {
     const updated = await api.deactivateTank(id, status);
     setTanks((prev) => prev.map((t) => (t.id === id ? updated : t)));
-    showToast(`Tank status updated.`);
+    // TankDetailsModal already triggers notifySuccess('Status Updated', ...)
   };
 
   const handleDeleteTank = async (id: string) => {
     await api.deleteTank(id);
     setTanks((prev) => prev.filter((t) => t.id !== id));
-    showToast('Tank permanently deleted.');
+    // TankDetailsModal already triggers notifySuccess('Tank Deleted', ...)
   };
 
   // Nozzle Handlers
@@ -450,19 +544,19 @@ function AppContent() {
     ]);
     setDispensers(updatedDisps);
     setStations(updatedStations);
-    showToast(`Nozzle #${created.nozzleNumber} (${created.fuelCode}) added!`);
+    // NozzlesView already triggers notifySuccess('Nozzle Added', ...)
   };
 
   const handleUpdateNozzle = async (id: string, payload: any) => {
     const updated = await api.updateNozzle(id, payload);
     setNozzles((prev) => prev.map((n) => (n.id === id ? updated : n)));
-    showToast(`Nozzle #${updated.nozzleNumber} updated successfully.`);
+    // NozzlesView already triggers notifySuccess('Nozzle Updated', ...)
   };
 
   const handleUpdateNozzleStatus = async (id: string, status: string) => {
     const updated = await api.updateNozzleStatus(id, status);
     setNozzles((prev) => prev.map((n) => (n.id === id ? updated : n)));
-    showToast(`Nozzle #${updated.nozzleNumber} status changed to ${status}.`);
+    // NozzlesView already triggers notifySuccess(...)
   };
 
   const handleDeleteNozzle = async (id: string) => {
@@ -474,55 +568,27 @@ function AppContent() {
     ]);
     setDispensers(updatedDisps);
     setStations(updatedStations);
-    showToast('Nozzle permanently deleted.');
+    // NozzlesView already triggers notifySuccess('Nozzle Deleted', ...)
   };
 
   // User Handlers
   const handleCreateUser = async (payload: any) => {
     const newUser = await api.createUser(payload);
     setEmployees((prev) => [...prev, newUser]);
-    showToast(`User "${newUser.name}" (${newUser.role}) created successfully!`);
+    // UsersView already triggers notifySuccess('User Created', ...)
   };
 
   const handleUpdateUser = async (id: string, payload: any) => {
     const updated = await api.updateUser(id, payload);
     setEmployees((prev) => prev.map((e) => (e.id === id ? updated : e)));
-    showToast(`User "${updated.name}" updated successfully.`);
+    // UsersView already triggers notifySuccess('User Updated', ...)
   };
 
   const handleUpdateUserStatus = async (id: string, status: string) => {
     const updated = await api.updateUserStatus(id, status);
     setEmployees((prev) => prev.map((e) => (e.id === id ? updated : e)));
-    showToast(`User "${updated.name}" status updated to ${status}.`);
+    // UsersView already triggers notifySuccess(...)
   };
-
-  if (authChecking) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900 text-white">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
-          <h2 className="text-xs font-semibold text-slate-400">Verifying session security...</h2>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <LoginView onLoginSuccess={handleLoginSuccess} />;
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600 dark:text-emerald-400" />
-          <h2 className="text-xs font-semibold text-slate-500 dark:text-gray-400">
-            Loading station telemetry and live records...
-          </h2>
-        </div>
-      </div>
-    );
-  }
 
   const fallbackStation: Station = {
     id: currentStationId || 'st-101',
@@ -537,7 +603,71 @@ function AppContent() {
     phone: '',
   };
 
-  const currentStation = stations.find((s) => s.id === currentStationId) || stations[0] || fallbackStation;
+  // Multi-bunk permission scoping: users assigned multiple bunks can switch between their assigned stations
+  const userAccessibleStations = useMemo(() => {
+    if (!currentUser || currentRole === 'OWNER') {
+      return stations;
+    }
+    let assignedIds: string[] = [];
+    if (currentUser.assignedBunks) {
+      if (Array.isArray(currentUser.assignedBunks)) {
+        assignedIds = currentUser.assignedBunks;
+      } else if (typeof (currentUser.assignedBunks as any) === 'string') {
+        try {
+          const parsed = JSON.parse(currentUser.assignedBunks as any);
+          if (Array.isArray(parsed)) assignedIds = parsed;
+          else assignedIds = (currentUser.assignedBunks as any).split(',').map((s: string) => s.trim());
+        } catch {
+          assignedIds = (currentUser.assignedBunks as any).split(',').map((s: string) => s.trim());
+        }
+      }
+    }
+    if (currentUser.stationId && !assignedIds.includes(currentUser.stationId)) {
+      assignedIds.push(currentUser.stationId);
+    }
+    if (assignedIds.length > 0) {
+      const filtered = stations.filter((s) => assignedIds.includes(s.id));
+      if (filtered.length > 0) return filtered;
+    }
+    return stations;
+  }, [stations, currentUser, currentRole]);
+
+  // Keep currentStationId synchronized to user's permitted stations
+  useEffect(() => {
+    if (userAccessibleStations.length > 0 && !userAccessibleStations.some((s) => s.id === currentStationId)) {
+      setCurrentStationId(userAccessibleStations[0].id);
+    }
+  }, [userAccessibleStations, currentStationId]);
+
+  if (authChecking) {
+    return (
+      <div className="flex h-[100dvh] max-h-[100dvh] w-full items-center justify-center bg-slate-900 text-white">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
+          <h2 className="text-xs font-semibold text-slate-400">Verifying session security...</h2>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginView onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[100dvh] max-h-[100dvh] w-full items-center justify-center bg-slate-50 dark:bg-gray-950 text-slate-900 dark:text-white transition-colors">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-600 dark:text-emerald-400" />
+          <h2 className="text-xs font-semibold text-slate-500 dark:text-gray-400">
+            Loading station telemetry and live records...
+          </h2>
+        </div>
+      </div>
+    );
+  }
+
+  const currentStation = userAccessibleStations.find((s) => s.id === currentStationId) || userAccessibleStations[0] || fallbackStation;
 
   const effectiveProfile: UserProfile | null = userProfile
     ? {
@@ -558,7 +688,7 @@ function AppContent() {
     : null;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-100 dark:bg-gray-950 font-sans text-slate-900 dark:text-gray-100 antialiased selection:bg-emerald-500 selection:text-white transition-colors">
+    <div className="flex h-[100dvh] max-h-[100dvh] min-h-[100dvh] w-full flex-col overflow-hidden bg-[#EEF6F5] dark:bg-[#061816] font-sans text-slate-900 dark:text-gray-100 antialiased selection:bg-[#12544F] selection:text-white transition-colors">
       {/* Global Error Banner */}
       {errorMsg && (
         <div className="flex items-center justify-center gap-2 bg-rose-500/10 border-b border-rose-500/20 px-4 py-2 text-xs text-rose-700 dark:text-rose-300">
@@ -569,9 +699,12 @@ function AppContent() {
 
       {/* Top Header */}
       <Header
+        stations={userAccessibleStations}
+        currentStationId={currentStationId}
+        activeStation={currentStation}
+        onSelectStation={setCurrentStationId}
         fuels={fuels}
         currentRole={currentRole}
-        activeStation={currentStation}
         onOpenPriceModal={() => setIsPriceModalOpen(true)}
         onOpenProfile={() => navigate('/profile')}
         onLogout={handleLogout}
@@ -583,8 +716,12 @@ function AppContent() {
       />
 
       {/* Body: Sidebar + Main Content Layout */}
-      <div className="flex flex-1 min-h-0 overflow-hidden relative">
+      <div className="flex flex-1 min-h-0 overflow-hidden relative bg-[#EEF6F5] dark:bg-[#061816]">
         <Sidebar
+          stations={userAccessibleStations}
+          currentStationId={currentStationId}
+          activeStation={currentStation}
+          onSelectStation={setCurrentStationId}
           activeTab={activeTab}
           onSelectTab={handleSelectTab}
           currentRole={currentRole}
@@ -597,7 +734,10 @@ function AppContent() {
           onLogout={handleLogout}
         />
 
-        <main className="flex-1 min-w-0 h-full overflow-y-auto p-3 sm:p-5 md:p-6 pb-28 lg:pb-8 max-w-full bg-slate-50 dark:bg-[#081D1B] transition-colors">
+        <main
+          className="flex-1 min-w-0 h-full overflow-y-auto overscroll-none px-3 sm:px-4 md:px-5 pt-1.5 sm:pt-2 pb-28 lg:pb-8 max-w-full transition-colors"
+          data-scroll-container="true"
+        >
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/login" element={<Navigate to="/dashboard" replace />} />
@@ -615,6 +755,7 @@ function AppContent() {
                   dispensers={dispensers}
                   shifts={shifts}
                   tankLoads={tankLoads}
+                  readings={readings}
                   analytics={null}
                   onOpenDipModal={setActiveDipTank}
                   onOpenDecantModal={setActiveDecantTank}
@@ -689,7 +830,7 @@ function AppContent() {
               path="/nozzles"
               element={
                 <NozzlesView
-                  stations={stations}
+                  stations={userAccessibleStations}
                   tanks={tanks}
                   nozzles={nozzles}
                   dispensers={dispensers}
@@ -710,7 +851,7 @@ function AppContent() {
               path="/users"
               element={
                 <UsersView
-                  stations={stations}
+                  stations={userAccessibleStations}
                   employees={employees}
                   currentRole={currentRole}
                   currentStationId={currentStationId}
@@ -726,12 +867,13 @@ function AppContent() {
               element={
                 <TanksView
                   station={currentStation}
-                  stations={stations}
+                  stations={userAccessibleStations}
                   tanks={tanks}
                   nozzles={nozzles}
                   fuels={fuels}
                   tankLoads={tankLoads}
                   currentRole={currentRole}
+                  onSelectStation={setCurrentStationId}
                   onOpenDipModal={setActiveDipTank}
                   onOpenDecantModal={setActiveDecantTank}
                   onCreateTank={handleCreateTank}
@@ -747,7 +889,7 @@ function AppContent() {
               element={
                 <ManualMeterForm
                   station={currentStation}
-                  stations={stations}
+                  stations={userAccessibleStations}
                   dispensers={dispensers}
                   nozzles={nozzles}
                   tanks={tanks}
@@ -763,13 +905,34 @@ function AppContent() {
             />
 
             <Route
+              path="/decant"
+              element={
+                <DecantView
+                  station={currentStation}
+                  stations={userAccessibleStations}
+                  tanks={tanks}
+                  fuels={fuels}
+                  tankLoads={tankLoads}
+                  currentRole={currentRole}
+                  currentUser={currentUser}
+                  onSelectStation={setCurrentStationId}
+                  onOpenDecantModal={setActiveDecantTank}
+                  onOpenDipModal={setActiveDipTank}
+                  onRefresh={loadData}
+                />
+              }
+            />
+
+            <Route
               path="/shifts"
               element={
                 <ShiftsView
                   station={currentStation}
+                  stations={userAccessibleStations}
                   shifts={shifts}
                   employees={employees}
                   fuels={fuels}
+                  onSelectStation={setCurrentStationId}
                   onSettleShift={handleSettleShift}
                   onOpenShiftModal={() => setIsNewShiftModalOpen(true)}
                 />
@@ -781,6 +944,8 @@ function AppContent() {
               element={
                 <EODSchedulerPanel
                   station={currentStation}
+                  stations={userAccessibleStations}
+                  onSelectStation={setCurrentStationId}
                   settlements={eodSettlements}
                   onRunEODClose={handleRunEODClose}
                 />
@@ -792,6 +957,8 @@ function AppContent() {
               element={
                 <DSRView
                   station={currentStation}
+                  stations={userAccessibleStations}
+                  onSelectStation={setCurrentStationId}
                   dsr={null}
                   tanks={tanks}
                   fuels={fuels}
@@ -807,7 +974,8 @@ function AppContent() {
               element={
                 <SalesEfficiencyView
                   station={currentStation}
-                  stations={stations}
+                  stations={userAccessibleStations}
+                  onSelectStation={setCurrentStationId}
                   shifts={shifts}
                   readings={readings}
                   nozzles={nozzles}
@@ -871,7 +1039,18 @@ function AppContent() {
       {activeDecantTank && (
         <DecantingModal
           tank={activeDecantTank}
-          fuel={fuels.find((f) => f.code === activeDecantTank.fuelCode)!}
+          fuel={
+            fuels.find((f) => f.code === activeDecantTank.fuelCode) || ({
+              code: activeDecantTank.fuelCode,
+              name: activeDecantTank.fuelCode,
+              shortName: activeDecantTank.fuelCode,
+              ratePerLiter: 100,
+              color: '#10B981',
+              densityStandard15C: activeDecantTank.fuelCode === 'DIESEL' ? 830 : 745,
+              densityTolerance: 3,
+              densityStd15c: activeDecantTank.fuelCode === 'DIESEL' ? 830 : 745,
+            } as any)
+          }
           isOpen={!!activeDecantTank}
           onClose={() => setActiveDecantTank(null)}
           onSubmit={handleDecantLoad}
@@ -881,9 +1060,12 @@ function AppContent() {
       {isPriceModalOpen && (
         <PriceModal
           fuels={fuels}
+          stations={stations}
+          activeStation={currentStation}
           isOpen={isPriceModalOpen}
           onClose={() => setIsPriceModalOpen(false)}
           onSubmit={handleUpdateFuelRates}
+          onResetStationRate={handleResetStationFuelRate}
         />
       )}
 
@@ -892,6 +1074,7 @@ function AppContent() {
           station={currentStation}
           employees={employees}
           dispensers={dispensers}
+          nozzles={nozzles}
           fuels={fuels}
           shifts={shifts}
           isOpen={isNewShiftModalOpen}
@@ -905,20 +1088,20 @@ function AppContent() {
         <QRScannerModal
           isOpen={isQRScannerOpen}
           onClose={() => setIsQRScannerOpen(false)}
+          currentUser={currentUser}
+          currentRole={currentRole}
+          stations={stations}
           onNavigateToEntity={(resolved) => {
             setIsQRScannerOpen(false);
             if (resolved.type === 'BUNK') {
               setCurrentStationId(resolved.entity.id);
               navigate('/bunks');
-              showToast(`Forecourt "${resolved.entity.name}" selected from QR.`);
             } else if (resolved.type === 'TANK') {
               setCurrentStationId(resolved.entity.stationId);
               navigate('/bunks');
-              showToast(`Tank "${resolved.entity.name || resolved.entity.id}" located.`);
             } else if (resolved.type === 'NOZZLE') {
               setCurrentStationId(resolved.entity.stationId);
               navigate('/meters');
-              showToast(`Nozzle #${resolved.entity.nozzleNumber} loaded for reading update.`);
             }
           }}
         />

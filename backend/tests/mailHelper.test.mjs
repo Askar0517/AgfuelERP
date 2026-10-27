@@ -34,6 +34,7 @@ test('sendMail dispatches email and updates in-memory audit log', async () => {
   const logs = getMailLog();
   assert.strictEqual(logs.length, 1);
   assert.strictEqual(logs[0].to, 'forecourt.manager@petropulse.in');
+  assert.strictEqual(logs[0].cc, 'abdulaskar45@gmail.com');
   assert.strictEqual(logs[0].subject, 'Daily Forecourt Checklist');
   assert.strictEqual(logs[0].status, 'SENT');
 });

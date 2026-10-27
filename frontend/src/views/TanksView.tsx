@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Tank, FuelProduct, TankLoadDecanting, Station, Nozzle, UserRole } from '../types';
 import { CylindricalTank } from '../components/CylindricalTank';
 import {
@@ -12,6 +12,7 @@ import {
   Eye,
   X,
   Image as ImageIcon,
+  Building2,
 } from 'lucide-react';
 import { SelectDropdown } from '../components/common/SelectDropdown';
 import { TankDetailsModal } from '../components/tanks/TankDetailsModal';
@@ -27,6 +28,7 @@ interface TanksViewProps {
   fuels: FuelProduct[];
   tankLoads: TankLoadDecanting[];
   currentRole?: UserRole;
+  onSelectStation?: (id: string) => void;
   onOpenDipModal: (tank: Tank) => void;
   onOpenDecantModal: (tank: Tank) => void;
   onCreateTank?: (payload: any) => Promise<void>;
@@ -43,6 +45,7 @@ export const TanksView: React.FC<TanksViewProps> = ({
   fuels,
   tankLoads,
   currentRole = 'OWNER',
+  onSelectStation,
   onOpenDipModal,
   onOpenDecantModal,
   onCreateTank,
@@ -50,8 +53,23 @@ export const TanksView: React.FC<TanksViewProps> = ({
   onDeactivateTank = async () => {},
   onDeleteTank = async () => {},
 }) => {
-  const currentTanks = tanks.filter((t) => t.stationId === station.id);
-  const currentLoads = tankLoads.filter((l) => l.stationId === station.id);
+  const [activeStationId, setActiveStationId] = useState<string>(station?.id || stations[0]?.id || '');
+  const activeStation =
+    (stations.length > 0 ? stations.find((s) => s.id === activeStationId) : station) || station;
+
+  const handleStationChange = (id: string) => {
+    setActiveStationId(id);
+    if (onSelectStation) onSelectStation(id);
+  };
+
+  useEffect(() => {
+    if (station?.id && station.id !== activeStationId) {
+      setActiveStationId(station.id);
+    }
+  }, [station?.id]);
+
+  const currentTanks = tanks.filter((t) => t.stationId === activeStation?.id);
+  const currentLoads = tankLoads.filter((l) => l.stationId === activeStation?.id);
 
   // Expandable Tank Details State
   const [inspectedTank, setInspectedTank] = useState<Tank | null>(null);
@@ -63,6 +81,20 @@ export const TanksView: React.FC<TanksViewProps> = ({
   const [selectedCalcTankId, setSelectedCalcTankId] = useState<string>(
     currentTanks[0]?.id || ''
   );
+
+  // Pagination state for decanting audit log
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [station?.id]);
+
+  const totalPages = Math.ceil(currentLoads.length / pageSize) || 1;
+  const paginatedLoads = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return currentLoads.slice(startIndex, startIndex + pageSize);
+  }, [currentLoads, currentPage, pageSize]);
 
   const calcTank = currentTanks.find((t) => t.id === selectedCalcTankId) || currentTanks[0];
   const calcSafeUllage = calcTank
@@ -79,7 +111,7 @@ export const TanksView: React.FC<TanksViewProps> = ({
 
   if (stations.length === 0) {
     return (
-      <div className="space-y-6 pb-12 sm:pb-6 animate-fadeIn">
+      <div className="space-y-3 pb-12 sm:pb-6 animate-fadeIn">
         <Breadcrumbs
           items={[
             { label: 'Operations' },
@@ -102,7 +134,7 @@ export const TanksView: React.FC<TanksViewProps> = ({
   }
 
   return (
-    <div className="space-y-6 pb-12 sm:pb-6 animate-fadeIn">
+    <div className="space-y-3 pb-12 sm:pb-6 animate-fadeIn">
       {/* Breadcrumb Navigation & Action Bar */}
       <Breadcrumbs
         items={[
@@ -110,8 +142,8 @@ export const TanksView: React.FC<TanksViewProps> = ({
           { label: 'Tanks', isCurrent: true, icon: Droplets },
         ]}
         badge={
-          <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-            {station.name}
+          <span className="font-mono text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-semibold">
+            {activeStation.name} ({activeStation.code})
           </span>
         }
         actions={
@@ -206,12 +238,15 @@ export const TanksView: React.FC<TanksViewProps> = ({
             <SelectDropdown
               label="Select Target Tank"
               placeholder="Select target tank..."
-              options={currentTanks.map((t) => ({
-                value: t.id,
-                label: `Tank #${t.tankNumber} (${t.fuelCode})`,
-                description: `Stock: ${t.currentVolumeLiters.toLocaleString()} L \u00B7 Safe Cap: ${t.safeCapacityLiters.toLocaleString()} L`,
-                badge: t.fuelCode,
-              }))}
+              options={currentTanks.map((t) => {
+                const fuelObj = fuels.find((f) => f.code === t.fuelCode);
+                const fuelName = fuelObj?.name || t.fuelCode;
+                return {
+                  value: t.id,
+                  label: `Tank #${t.tankNumber} · ${fuelName}`,
+                  description: `Current Stock: ${t.currentVolumeLiters.toLocaleString()} L · Safe Cap: ${t.safeCapacityLiters.toLocaleString()} L`,
+                };
+              })}
               value={selectedCalcTankId}
               onChange={(val) => setSelectedCalcTankId(val)}
               searchable={currentTanks.length > 4}
@@ -284,7 +319,7 @@ export const TanksView: React.FC<TanksViewProps> = ({
         ) : (
           <div className="overflow-x-auto no-scrollbar">
             <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900">
+              <thead className="border-b border-[#D4E8E5] dark:border-[#194C47] text-[11px] uppercase tracking-wider text-[#0E3D38] dark:text-[#5EEAD4] bg-[#EAF4F3] dark:bg-[#0A2623] font-bold">
                 <tr>
                   <th className="py-2.5 px-3">Date / Time</th>
                   <th className="py-2.5 px-3">Tanker No</th>
@@ -299,7 +334,7 @@ export const TanksView: React.FC<TanksViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-gray-800 font-mono">
-                {currentLoads.map((load) => (
+                {paginatedLoads.map((load) => (
                   <tr key={load.id} className="hover:bg-slate-50 dark:hover:bg-gray-800/40 transition">
                     <td className="py-2.5 px-3 text-slate-600 dark:text-gray-300 font-sans">
                       {new Date(load.timestamp).toLocaleDateString([], {
@@ -371,6 +406,68 @@ export const TanksView: React.FC<TanksViewProps> = ({
             </table>
           </div>
         )}
+
+        {/* Ag-Grid styled pagination footer */}
+        {currentLoads.length > 0 && (
+          <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-950/30 rounded-b-xl">
+            <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+              <span>
+                Showing <strong className="text-slate-800 dark:text-slate-200">{((currentPage - 1) * pageSize) + 1}</strong>–<strong className="text-slate-800 dark:text-slate-200">{Math.min(currentPage * pageSize, currentLoads.length)}</strong> of <strong className="text-slate-800 dark:text-slate-200">{currentLoads.length}</strong> records
+              </span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-300 focus:outline-none"
+              >
+                <option value={10}>10 / page</option>
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+                <option value={100}>100 / page</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(1)}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              >
+                First
+              </button>
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              >
+                Prev
+              </button>
+              <span className="px-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Expandable Tank Details Modal (Mounted via ModalPortal above full viewport) */}
@@ -396,7 +493,7 @@ export const TanksView: React.FC<TanksViewProps> = ({
         <AddTankModal
           isOpen={isAddTankModalOpen}
           onClose={() => setIsAddTankModalOpen(false)}
-          station={station}
+          station={activeStation}
           fuels={fuels}
           existingTankCount={currentTanks.length}
           existingTanks={currentTanks}

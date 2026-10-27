@@ -1,4 +1,4 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { SYSTEM_ROLES } from '../utils/rolesAndPermissions.ts';
 import authRoutes from './authRoutes.ts';
 import stationRoutes from './stationRoutes.ts';
@@ -49,8 +49,8 @@ apiRouter.get('/db/status', async (_req, res) => {
   res.json(status);
 });
 
-// Manual Re-trigger Table Sync & Connection Diagnostic
-apiRouter.post('/db/sync', async (_req, res) => {
+// Manual Re-trigger Table Sync & Connection Diagnostic (Protected: Administrative Operation)
+apiRouter.post('/db/sync', verifyPrivilege('CONFIGURATION', 'UPDATE'), async (_req, res) => {
   const freshStatus = await initDbAndSyncTables();
   res.json({
     message: 'Database connection test and table synchronization completed.',

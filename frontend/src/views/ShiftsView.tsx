@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Shift, Employee, Station, FuelProduct } from '../types';
 import { ShiftSettleModal } from '../components/ShiftSettleModal';
 import { Breadcrumbs } from '../components/common/Breadcrumbs';
+import { SelectDropdown } from '../components/common/SelectDropdown';
 import { getBunkCurrency } from '../utils/currency';
 import {
   Users,
@@ -18,6 +19,7 @@ interface ShiftsViewProps {
   shifts: Shift[];
   employees: Employee[];
   fuels: FuelProduct[];
+  onSelectStation?: (stationId: string) => void;
   onSettleShift: (shiftId: string, payload: any) => Promise<void>;
   onOpenShiftModal: () => void;
 }
@@ -27,19 +29,35 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
   stations = [],
   shifts,
   fuels,
+  onSelectStation,
   onSettleShift,
   onOpenShiftModal,
 }) => {
-  const currentShifts = shifts.filter((s) => s.stationId === station.id);
+  const [activeStationId, setActiveStationId] = useState<string>(station.id);
+  const activeStation =
+    (stations.length > 0 ? stations.find((s) => s.id === activeStationId) : station) || station;
+
+  useEffect(() => {
+    if (station?.id && station.id !== activeStationId) {
+      setActiveStationId(station.id);
+    }
+  }, [station?.id]);
+
+  const handleStationChange = (id: string) => {
+    setActiveStationId(id);
+    if (onSelectStation) onSelectStation(id);
+  };
+
+  const currentShifts = shifts.filter((s) => s.stationId === activeStation.id);
   const [settlingShift, setSettlingShift] = useState<Shift | null>(null);
-  const currency = getBunkCurrency(station);
+  const currency = getBunkCurrency(activeStation);
 
   const activeShifts = currentShifts.filter((s) => s.status === 'ACTIVE');
   const settledShifts = currentShifts.filter((s) => s.status !== 'ACTIVE');
 
-  if (stations.length === 0) {
+  if (stations.length === 0 && !station) {
     return (
-      <div className="space-y-6 pb-12 sm:pb-6 animate-fadeIn">
+      <div className="space-y-3 pb-12 sm:pb-6 animate-fadeIn">
         <Breadcrumbs
           items={[
             { label: 'Management' },
@@ -62,7 +80,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
   }
 
   return (
-    <div className="space-y-6 pb-12 sm:pb-6">
+    <div className="space-y-3 pb-12 sm:pb-6">
       {/* Breadcrumb Navigation & Action Bar */}
       <Breadcrumbs
         items={[
@@ -70,8 +88,8 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
           { label: 'Shifts', isCurrent: true, icon: Users },
         ]}
         badge={
-          <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-            {station.name}
+          <span className="font-mono text-xs px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold border border-emerald-500/20">
+            {station.name} ({station.code})
           </span>
         }
         actions={
@@ -109,7 +127,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
                   <div className="min-w-0">
                     <h3 className="text-base font-bold text-slate-900 dark:text-white truncate">{shift.attendantName}</h3>
                     <p className="text-xs text-slate-500 dark:text-gray-400">
-                      Island #{shift.islandNumber} \u00B7 Shift #{shift.shiftCode}
+                      Island #{shift.islandNumber} · Shift #{shift.shiftCode}
                     </p>
                     <p className="text-[11px] text-slate-400 dark:text-gray-400 font-mono">
                       Started: {new Date(shift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -153,8 +171,24 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
             </div>
           ))}
           {activeShifts.length === 0 && (
-            <div className="col-span-2 rounded-2xl border border-dashed border-slate-300 dark:border-gray-800 p-8 text-center text-xs text-slate-400 dark:text-gray-500">
-              No active shifts currently running. Click "Assign New Shift" above to open island pumps.
+            <div className="col-span-2 rounded-2xl border border-dashed border-slate-300 dark:border-gray-800 p-8 text-center text-xs text-slate-400 dark:text-gray-500 flex flex-col items-center justify-center gap-3">
+              <Clock className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+              <div>
+                <p className="font-semibold text-slate-700 dark:text-slate-300">
+                  No active duty shifts currently running for {station.name}.
+                </p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                  Assign forecourt staff to an island to begin fuel dispensing and meter tracking.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onOpenShiftModal}
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition active:scale-95 cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Assign New Shift Now</span>
+              </button>
             </div>
           )}
         </div>
@@ -181,7 +215,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({
         ) : (
           <div className="overflow-x-auto no-scrollbar">
             <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900">
+              <thead className="border-b border-[#D4E8E5] dark:border-[#194C47] text-[11px] uppercase tracking-wider text-[#0E3D38] dark:text-[#5EEAD4] bg-[#EAF4F3] dark:bg-[#0A2623] font-bold">
                 <tr>
                   <th className="py-2.5 px-3">Date / Start</th>
                   <th className="py-2.5 px-3">Shift Code</th>

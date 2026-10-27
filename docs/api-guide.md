@@ -56,8 +56,9 @@ All API endpoints are prefixed with `/api`.
 - `POST /api/eod/run-close` — Executes daily close.
 
 ## 7. Pricing & Fuels
-- `GET /api/fuels` — Current fuel products and selling rates.
-- `POST /api/fuels/:code/rate` — Updates retail selling price for a fuel grade.
+- `GET /api/fuels?stationId=...` — Returns fuel products and rates (effective rate for specific station if provided, or global base rates).
+- `POST /api/fuels/:code/rate` — Updates retail selling price for a fuel grade globally or for a specific bunk (`{ rate, stationId, remarks }`).
+- `POST /api/fuels/:code/reset` — Reverts a bunk's custom rate override back to the global base rate (`{ stationId }`).
 
 ## 8. User Management & Roster
 - `GET /api/users` — List staff members.

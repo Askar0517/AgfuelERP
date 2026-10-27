@@ -46,6 +46,7 @@ interface SalesEfficiencyViewProps {
   dispensers: Dispenser[];
   fuels: FuelProduct[];
   tanks: Tank[];
+  onSelectStation?: (stationId: string) => void;
 }
 
 export const SalesEfficiencyView: React.FC<SalesEfficiencyViewProps> = ({
@@ -57,10 +58,18 @@ export const SalesEfficiencyView: React.FC<SalesEfficiencyViewProps> = ({
   dispensers = [],
   fuels = [],
   tanks = [],
+  onSelectStation,
 }) => {
   const [selectedStationId, setSelectedStationId] = useState<string>(station?.id || 'ALL');
   const [timeRange, setTimeRange] = useState<'today' | '7days' | '30days'>('today');
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+
+  const handleStationChange = (id: string) => {
+    setSelectedStationId(id);
+    if (id !== 'ALL' && onSelectStation) {
+      onSelectStation(id);
+    }
+  };
 
   // Filter records by selected station
   const isAll = selectedStationId === 'ALL';
@@ -173,7 +182,7 @@ export const SalesEfficiencyView: React.FC<SalesEfficiencyViewProps> = ({
   ];
 
   return (
-    <div className="space-y-6 pb-12 sm:pb-6 animate-fadeIn">
+    <div className="space-y-3.5 pb-12 sm:pb-6 animate-fadeIn">
       {/* 1. Compact Header with Breadcrumb Navigation & Controls */}
       <Breadcrumbs
         items={[
@@ -197,7 +206,7 @@ export const SalesEfficiencyView: React.FC<SalesEfficiencyViewProps> = ({
               <div className="w-48 sm:w-52">
                 <SelectDropdown
                   value={selectedStationId}
-                  onChange={(val) => setSelectedStationId(val)}
+                  onChange={(val) => handleStationChange(val)}
                   options={[
                     { value: 'ALL', label: 'All Fuel Bunks', badge: 'ALL' },
                     ...stations.map((st) => ({
@@ -508,7 +517,7 @@ export const SalesEfficiencyView: React.FC<SalesEfficiencyViewProps> = ({
         ) : (
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-800">
+              <thead className="bg-[#EAF4F3] dark:bg-[#0A2623] text-[#0E3D38] dark:text-[#5EEAD4] font-bold border-b border-[#D4E8E5] dark:border-[#194C47]">
                 <tr>
                   <th className="py-2.5 px-3">Attendant</th>
                   <th className="py-2.5 px-3 text-center">Shifts Logged</th>

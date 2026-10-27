@@ -12,7 +12,9 @@ import { SelectDropdown } from '../common/SelectDropdown';
 
 interface EODSchedulerPanelProps {
   station: Station;
+  stations?: Station[];
   settlements: EODSettlement[];
+  onSelectStation?: (stationId: string) => void;
   onRunEODClose: (payload: {
     stationId: string;
     settlementDate: string;
@@ -24,14 +26,38 @@ interface EODSchedulerPanelProps {
 
 export const EODSchedulerPanel: React.FC<EODSchedulerPanelProps> = ({
   station,
+  stations = [],
   settlements,
+  onSelectStation,
   onRunEODClose,
 }) => {
-  const currentSettlements = settlements.filter((s) => s.stationId === station.id);
+  const [activeStationId, setActiveStationId] = useState<string>(station.id);
+  const activeStation =
+    (stations.length > 0 ? stations.find((s) => s.id === activeStationId) : station) || station;
+
+  useEffect(() => {
+    if (station?.id && station.id !== activeStationId) {
+      setActiveStationId(station.id);
+      if (station.timezone) {
+        setSelectedTimezone(station.timezone);
+      }
+    }
+  }, [station?.id]);
+
+  const handleStationChange = (id: string) => {
+    setActiveStationId(id);
+    const chosen = stations.find((s) => s.id === id);
+    if (chosen?.timezone) {
+      setSelectedTimezone(chosen.timezone);
+    }
+    if (onSelectStation) onSelectStation(id);
+  };
+
+  const currentSettlements = settlements.filter((s) => s.stationId === activeStation.id);
 
   // Timezone state
   const [selectedTimezone, setSelectedTimezone] = useState<string>(
-    station.timezone || 'Asia/Kolkata'
+    activeStation.timezone || 'Asia/Kolkata'
   );
   const [currentTimeStr, setCurrentTimeStr] = useState<string>('');
   const [currentDateStr, setCurrentDateStr] = useState<string>('');
@@ -93,7 +119,7 @@ export const EODSchedulerPanel: React.FC<EODSchedulerPanelProps> = ({
     setSuccessMsg(null);
     try {
       await onRunEODClose({
-        stationId: station.id,
+        stationId: activeStation.id,
         settlementDate,
         timezone: selectedTimezone,
         closedBy,

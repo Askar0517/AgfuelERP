@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Station,
   Nozzle,
@@ -117,11 +117,19 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
     notes: '',
   });
 
+  // Synchronize default bunk when currentStationId updates
+  useEffect(() => {
+    if (currentStationId && currentStationId !== formData.stationId && !editingNozzle) {
+      setFormData((prev) => ({ ...prev, stationId: currentStationId }));
+    }
+  }, [currentStationId, editingNozzle]);
+
   const canManageNozzles = currentRole === 'OWNER' || currentRole === 'MANAGER';
 
-  // Filter nozzles based on role (Bunk Manager can only see assigned bunk nozzles)
+  // Filter nozzles based on accessible bunks
   const accessibleNozzles = nozzles.filter((n) => {
     if (currentRole === 'OWNER') return true;
+    if (stations.some((s) => s.id === n.stationId)) return true;
     return n.stationId === currentStationId;
   });
 
@@ -382,7 +390,7 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
 
   if (stations.length === 0) {
     return (
-      <div className="space-y-6 pb-12 sm:pb-6 animate-fadeIn">
+      <div className="space-y-3 pb-12 sm:pb-6 animate-fadeIn">
         <Breadcrumbs
           items={[
             { label: 'Operations' },
@@ -405,10 +413,10 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
   }
 
   return (
-    <div className="space-y-5 animate-fadeIn pb-12">
+    <div className="space-y-3.5 animate-fadeIn pb-12">
       {/* View Mode: IN-PAGE FORM */}
       {viewMode === 'FORM' ? (
-        <div className="space-y-6 max-w-4xl mx-auto">
+        <div className="space-y-4 max-w-4xl mx-auto">
           {/* Breadcrumb Navigation & Top Action Bar */}
           <Breadcrumbs
             items={[
@@ -450,98 +458,84 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
               </div>
             )}
 
-            {/* Read-Only Entity Code Banner */}
-            <div className="p-4 rounded-2xl bg-white dark:bg-[#0D2926] border border-slate-200 dark:border-[#194C47] shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-slate-700 dark:text-slate-300">Authoritative Nozzle Identifier:</span>
-                <span className="font-mono font-bold text-[#12544F] dark:text-[#2BA096] bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
-                  {editingNozzle ? editingNozzle.id : '(Generated exclusively by backend upon creation, e.g. NOZZ-000001)'}
+            {/* Nozzle ID Banner (Simple & clean) */}
+            {editingNozzle && (
+              <div className="px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-[#194C47] flex items-center justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400">Nozzle ID:</span>
+                <span className="font-mono font-bold text-[#12544F] dark:text-[#2BA096]">
+                  {editingNozzle.id}
                 </span>
               </div>
-              <span className="text-[11px] text-slate-400">
-                Identifiers are controlled authoritatively by backend code generator with collision safeguards.
-              </span>
-            </div>
+            )}
 
-            {/* SECTION 1: Forecourt Bunk & Subterranean Tank Hierarchy */}
-            <div className="p-6 rounded-2xl bg-white dark:bg-[#0D2926] border border-slate-200 dark:border-[#194C47] shadow-2xs space-y-5">
-              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+            {/* SECTION 1: Station & Fuel Tank */}
+            <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-[#0D2926] border border-slate-200 dark:border-[#194C47] shadow-2xs space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
                 <Building2 className="w-4 h-4 text-[#12544F] dark:text-[#2BA096]" />
-                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
-                  1. Forecourt Asset Hierarchy & Fluid Routing
+                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                  Station & Storage Tank
                 </h2>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* 1. Parent Bunk */}
                 <div>
                   <SelectDropdown
-                    label="Parent Fuel Bunk"
+                    label="Station"
                     required
                     disabled={editingNozzle !== null}
-                    placeholder="Select a parent bunk..."
+                    placeholder="Select station..."
                     options={stations.map((s) => ({
                       value: s.id,
-                      label: `${s.name} (${s.code})`,
-                      description: s.location,
-                      badge: s.code,
+                      label: s.name,
                     }))}
                     value={formData.stationId}
                     onChange={(val) => handleStationChange(val)}
                     error={fieldErrors.stationId}
-                    helpText="Every nozzle belongs strictly to exactly one bunk station."
                     searchable={stations.length > 4}
                   />
                 </div>
 
-                {/* 2. Subterranean Storage Tank */}
+                {/* 2. Storage Tank */}
                 <div>
                   <SelectDropdown
-                    label="Subterranean Fuel Tank"
-                    placeholder="Select feeder tank..."
+                    label="Fuel Tank"
+                    placeholder="Select tank..."
                     options={[
                       { value: '', label: 'Unassigned / Direct Feed' },
-                      ...formStationTanks.map((t) => ({
-                        value: t.id,
-                        label: `Tank #${t.tankNumber}: ${t.name || t.id}`,
-                        description: `Grade: ${t.fuelCode} \u00B7 Cap: ${t.capacityLiters.toLocaleString()} L`,
-                        badge: t.fuelCode,
-                      })),
+                      ...formStationTanks.map((t) => {
+                        const fuelDef = fuels.find((f) => f.code === t.fuelCode);
+                        const fuelName = fuelDef?.name || t.fuelCode;
+                        return {
+                          value: t.id,
+                          label: `Tank #${t.tankNumber} · ${fuelName}`,
+                        };
+                      }),
                     ]}
                     value={formData.tankId}
                     onChange={(val) => handleTankChange(val)}
-                    helpText={
-                      formStationTanks.length === 0
-                        ? 'No tanks provisioned for this station. Add a tank in Tank Master.'
-                        : 'Fuel type is strictly derived from the selected tank.'
-                    }
                     searchable={formStationTanks.length > 4}
                   />
                 </div>
 
-                {/* 3. Derived Fuel Grade (or Selectable if direct feed) */}
+                {/* 3. Derived Fuel Grade */}
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1 text-xs">
-                    Fuel Product Grade {formSelectedTank ? <span className="text-emerald-600">(Authoritative \u00B7 Locked to Tank)</span> : <span className="text-amber-600">(Select Grade)</span>}
+                    Fuel Grade
                   </label>
                   {formSelectedTank ? (
-                    <div className="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs">
+                    <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs min-h-[38px]">
                       <span
-                        className="w-3 h-3 rounded-full shrink-0"
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
                         style={{
                           backgroundColor: getFuelDefinition(formData.fuelCode).color,
                         }}
                       />
-                      <div className="flex-1 min-w-0">
-                        <span className="font-bold text-slate-900 dark:text-white block truncate">
-                          {getFuelDefinition(formData.fuelCode).name}
-                        </span>
-                        <span className="text-[10px] text-slate-400 block truncate">
-                          Derived from Tank #{formSelectedTank.tankNumber}: {formSelectedTank.name}
-                        </span>
-                      </div>
-                      <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                        LOCKED
+                      <span className="font-semibold text-slate-900 dark:text-white flex-1 truncate">
+                        {getFuelDefinition(formData.fuelCode).name}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                        From Tank #{formSelectedTank.tankNumber}
                       </span>
                     </div>
                   ) : (
@@ -555,23 +549,20 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                   {fieldErrors.fuelCode && (
                     <p className="mt-1 text-[11px] text-rose-500 font-medium">{fieldErrors.fuelCode}</p>
                   )}
-                  <span className="text-[10px] text-slate-400 mt-1 block">
-                    Fuel type is strictly bound to the physical storage tank to prevent contamination.
-                  </span>
                 </div>
               </div>
             </div>
 
-            {/* SECTION 2: Physical Hardware & Meter Configuration */}
-            <div className="p-6 rounded-2xl bg-white dark:bg-[#0D2926] border border-slate-200 dark:border-[#194C47] shadow-2xs space-y-5">
-              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+            {/* SECTION 2: Nozzle & Dispenser Details */}
+            <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-[#0D2926] border border-slate-200 dark:border-[#194C47] shadow-2xs space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
                 <Gauge className="w-4 h-4 text-[#12544F] dark:text-[#2BA096]" />
-                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
-                  2. Dispenser Hardware, Metering & Registers
+                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                  Nozzle & Dispenser Details
                 </h2>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
                 {/* Nozzle Number */}
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
@@ -579,6 +570,7 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                   </label>
                   <input
                     type="number"
+                    inputMode="numeric"
                     min="1"
                     name="nozzleNumber"
                     aria-invalid={Boolean(fieldErrors.nozzleNumber)}
@@ -588,33 +580,28 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                       setFormData({ ...formData, nozzleNumber: e.target.value });
                       if (fieldErrors.nozzleNumber) setFieldErrors((p) => ({ ...p, nozzleNumber: '' }));
                     }}
-                    className={`w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border text-slate-900 dark:text-slate-100 font-mono font-bold focus:outline-hidden ${
+                    className={`w-full h-[38px] px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border text-slate-900 dark:text-slate-100 font-mono font-bold focus:outline-hidden ${
                       fieldErrors.nozzleNumber
                         ? 'border-rose-500 focus:ring-2 focus:ring-rose-500'
                         : 'border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-[#12544F]'
                     }`}
                   />
-                  {fieldErrors.nozzleNumber ? (
+                  {fieldErrors.nozzleNumber && (
                     <p className="mt-1 text-[11px] text-rose-500 font-medium">{fieldErrors.nozzleNumber}</p>
-                  ) : (
-                    <span className="text-[11px] text-slate-400 mt-0.5 block">
-                      Must be unique within the selected bunk station.
-                    </span>
                   )}
                 </div>
 
                 {/* Dispenser */}
                 <div>
                   <SelectDropdown
-                    label="Dispenser / MPD Unit"
+                    label="Dispenser"
                     options={[
-                      { value: '', label: 'Auto Assign (Standard Dispenser)' },
+                      { value: '', label: 'Auto Assign' },
                       ...dispensers
                         .filter((d) => d.stationId === formData.stationId)
                         .map((d) => ({
                           value: d.id,
                           label: `Dispenser #${d.dispenserNumber} (Island ${d.islandNumber})`,
-                          description: d.brand,
                         })),
                     ]}
                     value={formData.dispenserId}
@@ -626,39 +613,39 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                 {/* Device Identifier */}
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
-                    Meter / Hardware Device ID
+                    Device ID (Optional)
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. NZ-01 / DEV-01"
+                    placeholder="e.g. NZ-01"
                     value={formData.deviceIdentifier}
                     onChange={(e) => setFormData({ ...formData, deviceIdentifier: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono focus:outline-hidden focus:ring-2 focus:ring-[#12544F]"
+                    className="w-full h-[38px] px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono focus:outline-hidden focus:ring-2 focus:ring-[#12544F]"
                   />
                 </div>
 
                 {/* Label / Name */}
                 <div className="sm:col-span-2">
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
-                    Nozzle Label / Display Name (Optional)
+                    Display Name (Optional)
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Island 1 Front - High Flow 95 Octane"
+                    placeholder="e.g. Island 1 - High Flow"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#12544F]"
+                    className="w-full h-[38px] px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#12544F]"
                   />
                 </div>
 
                 {/* Status */}
                 <div>
                   <SelectDropdown
-                    label="Operational Status"
+                    label="Status"
                     options={[
-                      { value: 'ACTIVE', label: 'Active (Dispensing)', badge: 'ACTIVE' },
-                      { value: 'UNDER_MAINTENANCE', label: 'Under Maintenance', badge: 'MAINTENANCE' },
-                      { value: 'INACTIVE', label: 'Inactive (Decommissioned)', badge: 'INACTIVE' },
+                      { value: 'ACTIVE', label: 'Active' },
+                      { value: 'UNDER_MAINTENANCE', label: 'Under Maintenance' },
+                      { value: 'INACTIVE', label: 'Inactive' },
                     ]}
                     value={formData.status}
                     onChange={(val) => setFormData({ ...formData, status: val })}
@@ -669,48 +656,45 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                 {/* Initial Totalizer */}
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
-                    Cumulative Totalizer Reading (Liters) <span className="text-emerald-600 font-normal">(Locked \u00B7 Initial Register)</span>
+                    Opening Reading (Liters)
                   </label>
                   <input
                     type="number"
                     step="0.01"
                     disabled
                     value={formData.initialTotalizer}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-mono cursor-not-allowed focus:outline-hidden"
+                    className="w-full h-[38px] px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-mono cursor-not-allowed focus:outline-hidden"
                   />
-                  <span className="text-[10px] text-slate-400 mt-1 block">
-                    Starts at 0.00 L. Meter advances only via authorized forecourt dispensing and verified meter logs.
-                  </span>
                 </div>
 
                 {/* Notes */}
                 <div className="sm:col-span-2">
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
-                    Calibration Notes & Stamping Remarks
+                    Notes (Optional)
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Calibrated with 5L standard test measure on previous shift..."
+                    placeholder="Optional notes or remarks..."
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#12544F]"
+                    className="w-full h-[38px] px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#12544F]"
                   />
                 </div>
               </div>
 
               {/* Form Footer Action Buttons */}
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setViewMode('LIST')}
-                  className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold cursor-pointer transition"
+                  className="px-5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold cursor-pointer transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 rounded-xl bg-[#12544F] hover:bg-[#0E433F] text-white text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-xs disabled:opacity-50 transition"
+                  className="px-6 py-2 rounded-xl bg-[#12544F] hover:bg-[#0E433F] text-white text-xs font-semibold flex items-center gap-2 cursor-pointer shadow-xs disabled:opacity-50 transition"
                 >
                   {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                   {editingNozzle ? 'Save Changes' : 'Create Nozzle'}
@@ -743,34 +727,50 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
           />
 
           {/* Filter and Search Bar */}
-          <div className="p-4 rounded-2xl bg-white dark:bg-[#0D2926] border border-slate-200 dark:border-[#194C47] shadow-2xs space-y-3">
+          <div className="p-4 rounded-2xl bg-white dark:bg-[#0D2926] border border-[#D4E8E5] dark:border-[#194C47] shadow-xs space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
               {/* Search */}
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <div className="relative flex items-center">
+                <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Search nozzles or devices..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-[#12544F]"
+                  className="w-full h-[38px] min-h-[38px] pl-9 pr-8 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-[#194C47] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-[#12544F]/30 focus:border-[#12544F] text-xs transition-all shadow-2xs"
                 />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
               {/* Station Filter */}
-              {currentRole === 'OWNER' && (
-                <div className="min-w-[200px]">
+              {stations.length > 1 && (
+                <div className="min-w-[180px]">
                   <SelectDropdown
                     options={[
-                      { value: 'ALL', label: 'All Bunks / Stations' },
+                      { value: 'ALL', label: 'All Stations' },
                       ...stations.map((s) => ({
                         value: s.id,
-                        label: `${s.name} (${s.code})`,
+                        label: s.name,
+                        badge: s.code,
                       })),
                     ]}
                     value={stationFilter}
-                    onChange={(val) => setStationFilter(val)}
-                    placeholder="Filter by bunk..."
+                    onChange={(val) => {
+                      setStationFilter(val);
+                      if (val !== 'ALL' && onSelectStation) {
+                        onSelectStation(val);
+                      }
+                    }}
+                    placeholder="All Stations"
                     searchable={stations.length > 5}
                   />
                 </div>
@@ -780,17 +780,15 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
               <div>
                 <SelectDropdown
                   options={[
-                    { value: 'ALL', label: 'All Fuel Types' },
+                    { value: 'ALL', label: 'All Fuels' },
                     ...FUEL_SELECT_OPTIONS.map((f) => ({
                       value: f.value,
                       label: f.label,
-                      badge: f.badge,
-                      badgeClass: f.badgeClass,
                     })),
                   ]}
                   value={fuelFilter}
                   onChange={(val) => setFuelFilter(val)}
-                  placeholder="Filter by fuel..."
+                  placeholder="All Fuels"
                   searchable={false}
                 />
               </div>
@@ -800,13 +798,13 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                 <SelectDropdown
                   options={[
                     { value: 'ALL', label: 'All Statuses' },
-                    { value: 'ACTIVE', label: 'Active Only' },
-                    { value: 'UNDER_MAINTENANCE', label: 'Maintenance Only' },
-                    { value: 'INACTIVE', label: 'Inactive Only' },
+                    { value: 'ACTIVE', label: 'Active' },
+                    { value: 'UNDER_MAINTENANCE', label: 'Maintenance' },
+                    { value: 'INACTIVE', label: 'Inactive' },
                   ]}
                   value={statusFilter}
                   onChange={(val) => setStatusFilter(val)}
-                  placeholder="Filter by status..."
+                  placeholder="All Statuses"
                   searchable={false}
                 />
               </div>
@@ -835,10 +833,10 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
           </div>
 
           {/* Nozzles Table */}
-          <div className="rounded-2xl border border-slate-200 dark:border-[#194C47] bg-white dark:bg-[#0D2926] shadow-2xs overflow-hidden">
+          <div className="rounded-2xl border border-[#D4E8E5] dark:border-[#194C47] bg-white dark:bg-[#0D2926] shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 font-semibold">
+                <thead className="border-b border-[#D4E8E5] dark:border-[#194C47] bg-[#EAF4F3] dark:bg-[#0A2623] text-[#0E3D38] dark:text-[#5EEAD4] font-bold">
                   <tr>
                     <th className="py-3 px-4">Nozzle</th>
                     <th className="py-3 px-4">Parent Bunk</th>
@@ -881,7 +879,7 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                                   {nozzle.name || `Nozzle ${nozzle.nozzleNumber}`}
                                 </span>
                                 <span className="text-[10px] text-slate-400 font-mono block">
-                                  {nozzle.id} \u00B7 {nozzle.deviceIdentifier || `NZ-${nozzle.nozzleNumber}`}
+                                  {nozzle.id} · {nozzle.deviceIdentifier || `NZ-${nozzle.nozzleNumber}`}
                                 </span>
                               </div>
                             </div>
@@ -1234,7 +1232,7 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                   Cannot Delete Nozzle #{blockedNozzleDelete.nozzle.nozzleNumber}
                 </h3>
                 <span className="text-xs text-slate-500 font-mono">
-                  {blockedNozzleDelete.nozzle.fuelCode} \u00B7 Totalizer: {blockedNozzleDelete.nozzle.electronicTotalizer.toLocaleString()} L
+                  {blockedNozzleDelete.nozzle.fuelCode} · Totalizer: {blockedNozzleDelete.nozzle.electronicTotalizer.toLocaleString()} L
                 </span>
               </div>
             </div>
@@ -1291,7 +1289,7 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
                   Delete Nozzle #{deletingNozzle.nozzleNumber}?
                 </h3>
                 <span className="text-xs text-slate-500 font-mono">
-                  {deletingNozzle.fuelCode} \u00B7 Totalizer: 0.00 L
+                  {deletingNozzle.fuelCode} · Totalizer: 0.00 L
                 </span>
               </div>
             </div>
@@ -1327,7 +1325,7 @@ export const NozzlesView: React.FC<NozzlesViewProps> = ({
           entityType="NOZZLE"
           entityId={qrNozzle.id}
           entityName={qrNozzle.name || `Nozzle #${qrNozzle.nozzleNumber}`}
-          subtitle={`${stations.find((s) => s.id === qrNozzle.stationId)?.name || 'Bunk'} \u00B7 ${getFuelDefinition(qrNozzle.fuelCode).name}`}
+          subtitle={`${stations.find((s) => s.id === qrNozzle.stationId)?.name || 'Bunk'} · ${getFuelDefinition(qrNozzle.fuelCode).name}`}
           parentBunkName={stations.find((s) => s.id === qrNozzle.stationId)?.name}
           fuelCode={qrNozzle.fuelCode}
           fuelColor={getFuelDefinition(qrNozzle.fuelCode).color}

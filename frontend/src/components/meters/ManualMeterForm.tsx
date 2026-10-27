@@ -32,6 +32,7 @@ import {
   Eye,
   X,
   Image as ImageIcon,
+  Loader2,
 } from 'lucide-react';
 import { api } from '../../api/client';
 import { useNotification } from '../../context/NotificationContext';
@@ -40,6 +41,7 @@ import { Breadcrumbs } from '../common/Breadcrumbs';
 import { ImageUploadInput } from '../common/ImageUploadInput';
 import { ModalPortal } from '../common/ModalPortal';
 import { getBunkCurrency, formatBunkAmount } from '../../utils/currency';
+import { formatNozzleCleanName, getFuelBadgeClass } from '../../utils/fuelConfig';
 
 export interface ManualMeterFormProps {
   station: Station;
@@ -90,6 +92,20 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
   // Workflow Step 1: Active selected bunk
   const [activeStationId, setActiveStationId] = useState<string>(station.id);
   const activeStation = (stations.length > 0 ? stations.find((s) => s.id === activeStationId) : station) || station;
+
+  // Sync activeStationId when the globally selected station changes
+  useEffect(() => {
+    if (station?.id && station.id !== activeStationId) {
+      setActiveStationId(station.id);
+    }
+  }, [station?.id]);
+
+  const handleBunkChange = (newStationId: string) => {
+    setActiveStationId(newStationId);
+    if (onSelectStation) {
+      onSelectStation(newStationId);
+    }
+  };
 
   // Filter dispensers & nozzles strictly for the selected bunk
   const stationDispensers = dispensers.filter((d) => d.stationId === activeStation.id);
@@ -180,7 +196,7 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
   const [closingMeter, setClosingMeter] = useState<number>(authoritativePreviousMeter);
   const [meterPhotoUrl, setMeterPhotoUrl] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
-  const [testingLiters, setTestingLiters] = useState<number>(5.0);
+  const [testingLiters, setTestingLiters] = useState<number>(0);
   const [readingType, setReadingType] = useState<string>('REGULAR_SHIFT');
   const [isCorrectionException, setIsCorrectionException] = useState<boolean>(false);
   const [correctionReason, setCorrectionReason] = useState<string>('');
@@ -194,6 +210,8 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
   // Search & Filters for Reading History
   const [historySearch, setHistorySearch] = useState('');
   const [historyTypeFilter, setHistoryTypeFilter] = useState('ALL');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   // Load next reading code series preview
   useEffect(() => {
@@ -268,6 +286,13 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
       return;
     }
 
+    if (!meterPhotoUrl || !meterPhotoUrl.trim()) {
+      setErrorMsg(
+        'Meter totalizer photograph is strictly mandatory for legal metrology and statutory audit compliance. Please capture or upload a clear photo of the meter display before saving.'
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -302,12 +327,13 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
       // Set new suggested closing meter to the exact reading just recorded
       setClosingMeter(closingMeter);
       setMeterPhotoUrl(null);
+      setTestingLiters(0);
       setIsCorrectionException(false);
       setCorrectionReason('');
       setRemarks('');
       setTimeout(() => setSuccessMsg(null), 6000);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to submit meter reading to authoritative ledger.');
+      setErrorMsg(err.message || 'Failed to submit meter reading.');
     } finally {
       setIsSubmitting(false);
     }
@@ -335,8 +361,19 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
       });
   }, [readings, activeStation.id, historyTypeFilter, historySearch]);
 
+  // Reset to page 1 on filter or station change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [historySearch, historyTypeFilter, activeStationId]);
+
+  const totalPages = Math.ceil(filteredReadings.length / pageSize) || 1;
+  const paginatedReadings = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredReadings.slice(startIndex, startIndex + pageSize);
+  }, [filteredReadings, currentPage, pageSize]);
+
   return (
-    <div className="space-y-6 pb-12 sm:pb-6 animate-fadeIn">
+    <div className="space-y-3 pb-12 sm:pb-6 animate-fadeIn">
       {/* Unified Breadcrumb Navigation & Station Selector */}
       <Breadcrumbs
         items={[
@@ -350,24 +387,6 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
         }
         actions={
           <div className="flex items-center gap-3">
-            {stations.length > 1 && (
-              <div className="min-w-[200px]">
-                <SelectDropdown
-                  options={stations.map((s) => ({
-                    value: s.id,
-                    label: `${s.name} (${s.code})`,
-                    badge: s.code,
-                  }))}
-                  value={activeStationId}
-                  onChange={(val) => {
-                    setActiveStationId(val);
-                    if (onSelectStation) onSelectStation(val);
-                  }}
-                  searchable={stations.length > 4}
-                />
-              </div>
-            )}
-
             <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-1.5 font-mono text-xs text-right hidden sm:block shadow-2xs">
               <span className="text-[10px] uppercase text-slate-500 dark:text-slate-400 block font-sans">Series</span>
               <span className="font-bold text-emerald-600 dark:text-emerald-400 text-xs tabular-nums">{nextReadingCode}</span>
@@ -398,39 +417,54 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
             {/* Step 1 & 2: Select Bunk and Select Nozzle */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                  1. Operating Bunk / Station:
-                </label>
-                <div className="p-2.5 rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/80 flex items-center gap-2 text-xs">
-                  <Building2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <span className="font-bold text-slate-900 dark:text-white block truncate">
-                      {activeStation.name}
-                    </span>
-                    <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                      {activeStation.code} · {activeStation.location}
-                    </span>
+                {stations.length > 1 ? (
+                  <SelectDropdown
+                    label="1. Station"
+                    required
+                    value={activeStationId}
+                    onChange={handleBunkChange}
+                    options={stations.map((s) => ({
+                      value: s.id,
+                      label: s.name,
+                    }))}
+                    searchable={stations.length > 3}
+                  />
+                ) : (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
+                      1. Station:
+                    </label>
+                    <div className="p-2.5 rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800/80 flex items-center gap-2 text-xs">
+                      <Building2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <span className="font-bold text-slate-900 dark:text-white block truncate">
+                          {activeStation.name}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                  2. Select Dispensing Nozzle:
+                  2. Nozzle:
                 </label>
                 {availableNozzles.length === 0 ? (
                   <div className="p-2.5 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 text-xs text-amber-800 dark:text-amber-300">
-                    No dispensing nozzles configured for this bunk.
+                    No nozzles configured for this station.
                   </div>
                 ) : (
                   <SelectDropdown
                     options={availableNozzles.map((noz) => {
                       const f = fuels.find((fuel) => fuel.code === noz.fuelCode);
+                      const cleanName = formatNozzleCleanName(noz.name, noz.nozzleNumber);
+                      const fuelTag = f?.shortName || f?.name || noz.fuelCode;
                       return {
                         value: noz.id,
-                        label: `${noz.name || `Nozzle #${noz.nozzleNumber}`} (${f?.shortName || noz.fuelCode})`,
-                        description: `Pump #${noz.dispenserNumber} · Last: ${noz.electronicTotalizer.toFixed(2)} L`,
-                        badge: f?.shortName || noz.fuelCode,
+                        label: cleanName,
+                        badge: fuelTag,
+                        badgeClass: getFuelBadgeClass(noz.fuelCode),
                       };
                     })}
                     value={selectedNozzleId}
@@ -444,14 +478,9 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
             {/* Previous Recorded Reading vs Current Meter Reading */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 pt-1">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-gray-300">
-                    Previous Recorded Reading (Liters):
-                  </label>
-                  <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded">
-                    Authoritative Record
-                  </span>
-                </div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
+                  Previous Reading (Liters):
+                </label>
                 <div className="relative">
                   <input
                     type="number"
@@ -464,22 +493,15 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
                     LOCKED
                   </div>
                 </div>
-                <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-                  Authoritative record loaded from backend. Manual alteration prohibited to protect custody.
-                </p>
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-gray-300">
-                    Current Cumulative Meter Reading (Liters):
-                  </label>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    2 Decimal Places
-                  </span>
-                </div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
+                  Current Reading (Liters):
+                </label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   step="0.01"
                   min="0"
                   value={closingMeter}
@@ -491,30 +513,27 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
                   }`}
                   required
                 />
-                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                  Dispensed = Current ({closingMeter.toFixed(2)}) − Opening ({authoritativePreviousMeter.toFixed(2)})
-                </p>
               </div>
             </div>
 
             {/* Meter Exception / Rollover Container */}
             {isRolloverOrReset && (
-              <div className="p-3.5 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 space-y-2.5 animate-fadeIn">
+              <div className="p-3.5 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 space-y-2 animate-fadeIn">
                 <div className="flex items-center gap-2 text-xs font-bold text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                  <span>Authorized Meter Rollover / Replacement Workflow Active</span>
+                  <span>Meter Rollover or Replacement</span>
                 </div>
-                <p className="text-[11px] text-amber-700 dark:text-amber-300/90 leading-relaxed">
-                  The current reading ({closingMeter.toFixed(2)} L) is lower than the previous reading ({authoritativePreviousMeter.toFixed(2)} L). This is only permitted for physical meter unit replacements, 999999 rollover resets, or legal recalibration. A mandatory correction reason is required for audit compliance.
+                <p className="text-[11px] text-amber-700 dark:text-amber-300/90">
+                  Current reading ({closingMeter.toFixed(2)} L) is lower than previous reading ({authoritativePreviousMeter.toFixed(2)} L). Please provide a reason for the record.
                 </p>
 
                 <div>
                   <label className="block text-[11px] font-semibold text-amber-900 dark:text-amber-200 mb-1">
-                    Mandatory Exception Reason & Work Order:
+                    Reason for lower reading:
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Totalizer unit replaced by Gilbarco technician; reset from 0.00"
+                    placeholder="e.g. Totalizer unit replaced; rollover from 999999"
                     value={correctionReason}
                     onChange={(e) => setCorrectionReason(e.target.value)}
                     className="w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
@@ -528,12 +547,12 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <SelectDropdown
-                  label="Reading Category / Type"
+                  label="Reading Type"
                   options={[
-                    { value: 'REGULAR_SHIFT', label: 'Regular Shift End Reading' },
-                    { value: 'PERIODIC_CHECK', label: 'Mid-Shift Supervisory Audit' },
-                    { value: 'CALIBRATION', label: 'Legal Metrology Testing Jar' },
-                    { value: 'RESET_CORRECTION', label: 'Meter Rollover / Unit Replacement' },
+                    { value: 'REGULAR_SHIFT', label: 'Regular Shift End' },
+                    { value: 'PERIODIC_CHECK', label: 'Mid-Shift Audit' },
+                    { value: 'CALIBRATION', label: 'Testing Jar Calibration' },
+                    { value: 'RESET_CORRECTION', label: 'Meter Rollover / Replacement' },
                   ]}
                   value={isExceptionRequired ? 'RESET_CORRECTION' : readingType}
                   onChange={(val) => setReadingType(val)}
@@ -585,6 +604,7 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
                 </div>
                 <input
                   type="number"
+                  inputMode="decimal"
                   step="0.1"
                   min="0"
                   value={testingLiters}
@@ -603,22 +623,17 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
                   <span>Feeder Tank Stock Limit Exceeded</span>
                 </div>
                 <p className="text-[11px] text-rose-700 dark:text-rose-300/90 leading-relaxed">
-                  Available stock in feeder tank <strong>{feederTank.tankNumber || feederTank.name || feederTank.id}</strong> is only <strong>{(availableTankStock || 0).toFixed(2)} L</strong>. Net sales volume (<strong>{netSoldLiters.toFixed(2)} L</strong>) cannot exceed available stock. Recording this reading would cause a negative physical tank balance.
+                  Available stock in feeder tank <strong>{feederTank.tankNumber || feederTank.name || feederTank.id}</strong> is only <strong>{(availableTankStock || 0).toFixed(2)} L</strong>. Net sales volume (<strong>{netSoldLiters.toFixed(2)} L</strong>) cannot exceed available stock.
                 </p>
               </div>
             )}
 
-            {/* Shift & Attendant Details - Locked & Authoritative */}
+            {/* Shift & Attendant Details */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300">
-                    Recorded By (Attendant Name):
-                  </label>
-                  <span className="flex items-center gap-1 text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                    <Lock className="w-2.5 h-2.5 text-slate-400" /> SESSION VERIFIED
-                  </span>
-                </div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
+                  Attendant Name:
+                </label>
                 <div className="relative">
                   <input
                     type="text"
@@ -631,20 +646,12 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
                     LOCKED
                   </div>
                 </div>
-                <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
-                  Authoritatively populated from active session. Manual alteration prohibited.
-                </p>
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300">
-                    Shift Reference Code:
-                  </label>
-                  <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded font-mono">
-                    <Lock className="w-2.5 h-2.5 text-emerald-500" /> ACTIVE SHIFT
-                  </span>
-                </div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
+                  Shift Code:
+                </label>
                 <div className="relative">
                   <input
                     type="text"
@@ -657,34 +664,34 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
                     LOCKED
                   </div>
                 </div>
-                <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
-                  Assigned automatically from active forecourt shift.
-                </p>
               </div>
             </div>
 
             {/* Remarks */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">
-                Operational Remarks / Meter Condition Notes (Optional):
+                Remarks (Optional):
               </label>
               <input
                 type="text"
-                placeholder="e.g. Smooth dispensing; mechanical totalizer synchronized."
+                placeholder="Optional notes or remarks..."
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 px-3 py-2 text-xs text-slate-900 dark:text-white focus:border-emerald-500 focus:outline-none"
               />
             </div>
 
-            {/* Dispenser Physical Meter Photo Evidence */}
-            <div>
+            {/* Dispenser Physical Meter Photo Evidence (Mandatory for Legal Metrology) */}
+            <div className="rounded-xl border border-dashed border-amber-300 dark:border-amber-700/60 bg-amber-50/40 dark:bg-amber-950/20 p-3">
               <ImageUploadInput
-                label="Dispenser Totalizer Reading Photo (Evidence):"
-                helperText="Upload camera photo of physical dispenser totalizer/counter (PNG, JPG, WEBP up to 15MB)"
+                label="Meter Totalizer Photo (Mandatory): *"
+                helperText="Upload clear photo of the totalizer counter (Required for legal metrology & audit compliance)"
                 category="reading"
                 value={meterPhotoUrl}
-                onChange={(url) => setMeterPhotoUrl(url)}
+                onChange={(url) => {
+                  setMeterPhotoUrl(url);
+                  if (url && errorMsg?.includes('photograph')) setErrorMsg(null);
+                }}
               />
             </div>
 
@@ -692,16 +699,18 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={isSubmitting || (isRolloverOrReset && !correctionReason.trim()) || isStockExceeded}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 px-4 py-3 text-xs font-semibold text-white shadow-sm transition disabled:opacity-50 cursor-pointer"
+                disabled={isSubmitting || !meterPhotoUrl || (isRolloverOrReset && !correctionReason.trim()) || isStockExceeded}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 px-4 py-3 text-xs font-semibold text-white shadow-sm transition disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
               >
-                <Save className="h-4 w-4" />
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 <span>
                   {isSubmitting
-                    ? 'Submitting Authoritative Reading...'
+                    ? 'Saving Reading...'
                     : isStockExceeded
-                    ? 'Submission Blocked (Stock Limit Exceeded)'
-                    : 'Validate & Commit Nozzle Reading'}
+                    ? 'Stock Limit Exceeded'
+                    : !meterPhotoUrl
+                    ? 'Upload Meter Photo to Save *'
+                    : 'Save Meter Reading'}
                 </span>
               </button>
             </div>
@@ -775,6 +784,21 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
                 <span className="font-mono text-rose-600 dark:text-rose-400 tabular-nums">
                   -{testingLiters.toFixed(2)} L
                 </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Totalizer Photo:</span>
+                {meterPhotoUrl ? (
+                  <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 text-xs">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Attached ✓
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 font-bold text-amber-600 dark:text-amber-400 text-xs">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    Mandatory *
+                  </span>
+                )}
               </div>
 
               <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
@@ -860,7 +884,7 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
         ) : (
           <div className="overflow-x-auto no-scrollbar">
             <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-200 dark:border-slate-800 text-[11px] uppercase tracking-wider text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900">
+              <thead className="border-b border-[#D4E8E5] dark:border-[#194C47] text-[11px] uppercase tracking-wider text-[#0E3D38] dark:text-[#5EEAD4] bg-[#EAF4F3] dark:bg-[#0A2623] font-bold">
                 <tr>
                   <th className="py-2.5 px-3">Record ID & Date</th>
                   <th className="py-2.5 px-3">Nozzle</th>
@@ -877,7 +901,7 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-gray-800 font-mono">
-                {filteredReadings.map((r) => (
+                {paginatedReadings.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-gray-800/40 transition">
                     <td className="py-2.5 px-3 text-slate-600 dark:text-gray-300 font-sans">
                       <span className="font-mono font-bold text-slate-900 dark:text-white block">
@@ -973,6 +997,68 @@ export const ManualMeterForm: React.FC<ManualMeterFormProps> = ({
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Ag-Grid styled pagination footer */}
+        {filteredReadings.length > 0 && (
+          <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-950/30 rounded-b-xl">
+            <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+              <span>
+                Showing <strong className="text-slate-800 dark:text-slate-200">{((currentPage - 1) * pageSize) + 1}</strong>–<strong className="text-slate-800 dark:text-slate-200">{Math.min(currentPage * pageSize, filteredReadings.length)}</strong> of <strong className="text-slate-800 dark:text-slate-200">{filteredReadings.length}</strong> records
+              </span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-300 focus:outline-none"
+              >
+                <option value={10}>10 / page</option>
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+                <option value={100}>100 / page</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(1)}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              >
+                First
+              </button>
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              >
+                Prev
+              </button>
+              <span className="px-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              >
+                Next
+              </button>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(totalPages)}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              >
+                Last
+              </button>
+            </div>
           </div>
         )}
       </div>

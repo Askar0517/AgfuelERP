@@ -57,7 +57,7 @@ export const UserDetailsPage: React.FC<UserDetailsPageProps> = ({
   const roleDef = SYSTEM_ROLES.find((r) => r.id === user.role);
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-12">
+    <div className="space-y-3.5 animate-fadeIn pb-12">
       {/* Standard Unified Breadcrumbs & Actions Header */}
       <Breadcrumbs
         items={[

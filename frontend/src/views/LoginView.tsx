@@ -199,7 +199,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="h-screen max-h-screen w-full flex items-center justify-center bg-[#ECEEF2] dark:bg-slate-950 p-3 sm:p-5 lg:p-6 font-sans antialiased selection:bg-[#12544F]/15 selection:text-[#12544F] overflow-y-auto lg:overflow-hidden">
+    <div className="h-[100dvh] max-h-[100dvh] w-full flex items-center justify-center bg-[#ECEEF2] dark:bg-slate-950 p-3 sm:p-5 lg:p-6 font-sans antialiased selection:bg-[#12544F]/15 selection:text-[#12544F] overflow-y-auto lg:overflow-hidden">
       
       {/* Centered Floating Dual-Panel Card (Reference Image Layout) */}
       <div className="w-full max-w-[440px] sm:max-w-lg lg:max-w-[1040px] xl:max-w-[1100px] max-h-full lg:max-h-[min(620px,94vh)] bg-white dark:bg-slate-900 rounded-[24px] sm:rounded-[32px] shadow-[0_20px_60px_-15px_rgba(15,23,42,0.12)] border border-slate-200/80 dark:border-slate-800 p-4 sm:p-6 lg:p-6 flex flex-col lg:flex-row items-stretch gap-4 lg:gap-6 transition-all duration-300">
@@ -262,10 +262,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 </div>
 
                 <form onSubmit={handleLogin} className="space-y-3">
-                  {/* 4. Email/Username Input */}
+                  {/* 4. Email/Username/Phone Input */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Email or Username
+                      Mobile Number, Username, or Email
                     </label>
                     <div className="relative">
                       <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
@@ -280,7 +280,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                             setFieldErrors((p) => ({ ...p, usernameOrEmail: '' }));
                           }
                         }}
-                        placeholder="e.g. admin or rsharma"
+                        placeholder="e.g. 9876543210, admin, or email"
                         className={`w-full rounded-xl border bg-white dark:bg-slate-800 py-2.5 pl-9 pr-3.5 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 transition focus:outline-none ${
                           fieldErrors.usernameOrEmail
                             ? 'border-rose-500 ring-2 ring-rose-500/10'
@@ -295,10 +295,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     )}
                   </div>
 
-                  {/* 5. Password Input with Show/Hide Toggle */}
+                  {/* 5. Password/PIN Input with Show/Hide Toggle */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Password
+                      Password or Security PIN
                     </label>
                     <div className="relative">
                       <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
@@ -313,7 +313,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                             setFieldErrors((p) => ({ ...p, password: '' }));
                           }
                         }}
-                        placeholder="Enter account password"
+                        placeholder="Enter 4-6 digit PIN or password"
                         className={`w-full rounded-xl border bg-white dark:bg-slate-800 py-2.5 pl-9 pr-9 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 transition focus:outline-none ${
                           fieldErrors.password
                             ? 'border-rose-500 ring-2 ring-rose-500/10'

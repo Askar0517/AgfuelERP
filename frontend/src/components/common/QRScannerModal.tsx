@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   X,
   QrCode,
@@ -14,15 +14,22 @@ import {
   RefreshCw,
   Clock,
   VideoOff,
+  Upload,
+  ShieldAlert,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { api } from '../../api/client';
 import { useNotification } from '../../context/NotificationContext';
 import { ModalPortal } from './ModalPortal';
+import { AuthUser, UserRole, Station } from '../../types';
 
 export interface QRScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
+  currentUser?: AuthUser | null;
+  currentRole?: UserRole;
+  stations?: Station[];
   onNavigateToEntity: (resolved: {
     type: 'BUNK' | 'TANK' | 'NOZZLE';
     entity: any;
@@ -36,6 +43,9 @@ const SCAN_TIMEOUT_SECONDS = 120; // Maximum scanning duration: 2 minutes
 export const QRScannerModal: React.FC<QRScannerModalProps> = ({
   isOpen,
   onClose,
+  currentUser,
+  currentRole = 'OWNER',
+  stations = [],
   onNavigateToEntity,
 }) => {
   const { notifySuccess, notifyError, notifyWarning } = useNotification();
@@ -144,6 +154,20 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
           throw new Error('Scanner element not found in DOM.');
         }
 
+        // 1. Secure Context & MediaDevices Pre-Flight Check
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          const isHttp =
+            window.location.protocol === 'http:' &&
+            window.location.hostname !== 'localhost' &&
+            window.location.hostname !== '127.0.0.1';
+          const msg = isHttp
+            ? 'Camera scanning requires a secure HTTPS connection or localhost. Modern browsers block camera access on plain HTTP (IP addresses).'
+            : 'No camera hardware detected on this device. You can upload a QR image or look up tags manually.';
+          setCameraState('ERROR');
+          setCameraError(msg);
+          return;
+        }
+
         const html5QrCode = new Html5Qrcode(scannerContainerId, {
           formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
           verbose: false,
@@ -156,17 +180,83 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
           aspectRatio: 1.0,
         };
 
-        // Prefer rear camera, fallback to user camera
-        await html5QrCode.start(
-          { facingMode: 'environment' },
-          config,
-          (decodedText) => {
-            handleResolveCode(decodedText);
-          },
-          () => {
-            // Frame scanned without code; normal polling
+        // 2. Query enumerated camera devices
+        let cameraStarted = false;
+        let devices: Array<{ id: string; label: string }> = [];
+        try {
+          devices = await Html5Qrcode.getCameras();
+        } catch (deviceQueryErr: any) {
+          console.warn('Could not enumerate cameras:', deviceQueryErr);
+        }
+
+        if (devices && devices.length > 0) {
+          // Prefer back/rear camera if available, otherwise first camera
+          const backCamera = devices.find((d) => {
+            const l = (d.label || '').toLowerCase();
+            return l.includes('back') || l.includes('rear') || l.includes('environment');
+          });
+          const targetCameraId = backCamera ? backCamera.id : devices[0].id;
+
+          try {
+            await html5QrCode.start(
+              targetCameraId,
+              config,
+              (decodedText) => handleResolveCode(decodedText),
+              () => {}
+            );
+            cameraStarted = true;
+          } catch (startErr: any) {
+            console.warn('Primary camera device start error:', startErr);
+            // If primary camera failed and other cameras exist, try secondary
+            if (devices.length > 1) {
+              const altCamera = devices.find((d) => d.id !== targetCameraId);
+              if (altCamera) {
+                try {
+                  await html5QrCode.clear().catch(() => {});
+                  const freshInstance = new Html5Qrcode(scannerContainerId, {
+                    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+                    verbose: false,
+                  });
+                  scannerRef.current = freshInstance;
+                  await freshInstance.start(
+                    altCamera.id,
+                    config,
+                    (decodedText) => handleResolveCode(decodedText),
+                    () => {}
+                  );
+                  cameraStarted = true;
+                } catch {
+                  // Fall through
+                }
+              }
+            }
           }
-        );
+        }
+
+        // 3. Fallback to user facing mode if device list was empty or failed
+        if (!cameraStarted) {
+          try {
+            await html5QrCode.clear().catch(() => {});
+            const freshInstance = new Html5Qrcode(scannerContainerId, {
+              formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+              verbose: false,
+            });
+            scannerRef.current = freshInstance;
+            await freshInstance.start(
+              { facingMode: 'user' },
+              config,
+              (decodedText) => handleResolveCode(decodedText),
+              () => {}
+            );
+            cameraStarted = true;
+          } catch (facingUserErr) {
+            console.warn('Fallback facingMode user failed:', facingUserErr);
+          }
+        }
+
+        if (!cameraStarted) {
+          throw new Error('No camera sensor or video feed could be initialized.');
+        }
 
         setCameraState('SCANNING');
 
@@ -188,18 +278,73 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
       } catch (err: any) {
         console.error('Camera initialization error:', err);
         setCameraState('ERROR');
-        let msg = 'Could not access device camera.';
+        let msg = err.message || 'Could not access device camera.';
         if (err.name === 'NotAllowedError' || err.message?.includes('Permission')) {
-          msg = 'Camera permission was denied. Please allow camera access in browser settings.';
+          msg = 'Camera permission was denied. Please allow camera access in browser permissions.';
         } else if (err.name === 'NotFoundError' || err.message?.includes('not found')) {
           msg = 'No camera device detected on this system.';
-        } else if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-          msg = 'Camera requires a secure HTTPS connection or localhost context.';
         }
         setCameraError(msg);
       }
     }, 150);
   }, [handleResolveCode, notifyWarning, stopCamera]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Verify whether the current user has permission to access the resolved asset
+  const isPermitted = useMemo(() => {
+    if (!resolvedResult) return false;
+    const effectiveRole = currentRole || currentUser?.role;
+    if (effectiveRole === 'OWNER') return true;
+
+    const targetStationId =
+      resolvedResult.type === 'BUNK'
+        ? resolvedResult.entity.id
+        : resolvedResult.entity.stationId;
+
+    if (!targetStationId) return true;
+
+    let permittedStationIds: string[] = [];
+    if (currentUser?.assignedBunks) {
+      if (Array.isArray(currentUser.assignedBunks)) {
+        permittedStationIds = currentUser.assignedBunks;
+      } else if (typeof currentUser.assignedBunks === 'string') {
+        try {
+          permittedStationIds = JSON.parse(currentUser.assignedBunks);
+        } catch {
+          permittedStationIds = (currentUser.assignedBunks as string).split(',').map((s) => s.trim());
+        }
+      }
+    }
+    if (currentUser?.stationId) {
+      permittedStationIds.push(currentUser.stationId);
+    }
+
+    return permittedStationIds.includes(targetStationId);
+  }, [resolvedResult, currentUser, currentRole]);
+
+  // Local QR image scanner for local development and devices without cameras
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsLoading(true);
+    await stopCamera();
+    try {
+      const html5QrCode = new Html5Qrcode('qr-file-reader-dummy', {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        verbose: false,
+      });
+      const decodedText = await html5QrCode.scanFile(file, true);
+      await html5QrCode.clear();
+      await handleResolveCode(decodedText);
+    } catch (err: any) {
+      console.warn('QR file scan error:', err);
+      notifyError('QR File Scan Error', 'Could not detect a valid QR code in the uploaded image.');
+    } finally {
+      setIsLoading(false);
+      if (e.target) e.target.value = '';
+    }
+  };
 
   // Lifecycle on modal open / close
   useEffect(() => {
@@ -220,6 +365,10 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
   const handleOpenAction = (action: 'READING' | 'DETAILS') => {
     if (!resolvedResult) return;
+    if (!isPermitted) {
+      notifyWarning('Permission Restricted', 'You do not have access rights to this station asset.');
+      return;
+    }
     onNavigateToEntity({
       type: resolvedResult.type,
       entity: resolvedResult.entity,
@@ -231,6 +380,16 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
   return (
     <ModalPortal isOpen={isOpen} onClose={handleSafeClose} ariaLabel="Forecourt QR Tag Scanner" className="max-w-lg mx-auto">
+      {/* Hidden dummy container for file scanning */}
+      <div id="qr-file-reader-dummy" style={{ display: 'none' }} />
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/*"
+        onChange={handleFileUpload}
+        className="hidden"
+      />
+
       <div className="relative w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden text-slate-900 dark:text-gray-100 transition">
         {/* Flush top-right close button */}
         <button
@@ -256,40 +415,51 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
               </p>
             </div>
           </div>
-
         </div>
 
         {/* Mode Switcher Tabs */}
-        <div className="flex border-b border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/20 px-5 pt-2">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-950/20 px-5 pt-2">
+          <div className="flex">
+            <button
+              type="button"
+              onClick={() => {
+                setScannerMode('CAMERA');
+                if (cameraState !== 'SCANNING') startCamera();
+              }}
+              className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold border-b-2 cursor-pointer transition ${
+                scannerMode === 'CAMERA'
+                  ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Camera className="w-3.5 h-3.5" />
+              Live Camera
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setScannerMode('MANUAL');
+                stopCamera();
+              }}
+              className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold border-b-2 cursor-pointer transition ${
+                scannerMode === 'MANUAL'
+                  ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <Search className="w-3.5 h-3.5" />
+              Manual Tag Lookup
+            </button>
+          </div>
+
           <button
             type="button"
-            onClick={() => {
-              setScannerMode('CAMERA');
-              if (cameraState !== 'SCANNING') startCamera();
-            }}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold border-b-2 cursor-pointer transition ${
-              scannerMode === 'CAMERA'
-                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 transition cursor-pointer shadow-2xs mb-1"
+            title="Scan QR from local image file or screenshot"
           >
-            <Camera className="w-3.5 h-3.5" />
-            Live Camera Preview
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setScannerMode('MANUAL');
-              stopCamera();
-            }}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold border-b-2 cursor-pointer transition ${
-              scannerMode === 'MANUAL'
-                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <Search className="w-3.5 h-3.5" />
-            Manual Tag ID Lookup
+            <Upload className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>Upload QR Image</span>
           </button>
         </div>
 
@@ -310,7 +480,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
                       {/* Corner Target Accents */}
                       <span className="absolute -top-1 -left-1 w-4 h-4 border-t-2 border-l-2 border-emerald-400" />
                       <span className="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-emerald-400" />
-                      <span className="absolute -bottom-1 -left-1 w-4 h-4 border-bottom-2 border-l-2 border-emerald-400" />
+                      <span className="absolute -bottom-1 -left-1 w-4 h-4 border-b-2 border-l-2 border-emerald-400" />
                       <span className="absolute -bottom-1 -right-1 w-4 h-4 border-b-2 border-r-2 border-emerald-400" />
 
                       {/* Moving laser scan line */}
@@ -353,23 +523,24 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
                   <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center text-white space-y-3">
                     <VideoOff className="w-10 h-10 text-rose-400" />
                     <div>
-                      <h4 className="text-sm font-bold text-rose-300">Camera Access Error</h4>
+                      <h4 className="text-sm font-bold text-rose-300">Camera Access Unavailable</h4>
                       <p className="text-xs text-slate-300 mt-1 max-w-xs">
-                        {cameraError || 'Unable to start camera sensor.'}
+                        {cameraError || 'Unable to start camera sensor on this local device.'}
                       </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center justify-center gap-2">
                       <button
                         type="button"
-                        onClick={startCamera}
-                        className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold cursor-pointer transition"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white cursor-pointer transition shadow-xs flex items-center gap-1.5"
                       >
-                        Try Again
+                        <Upload className="w-3.5 h-3.5" />
+                        Upload QR Image
                       </button>
                       <button
                         type="button"
                         onClick={() => setScannerMode('MANUAL')}
-                        className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white cursor-pointer transition shadow-xs"
+                        className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 cursor-pointer transition"
                       >
                         Enter Tag Manually
                       </button>
@@ -403,7 +574,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
             </div>
           )}
 
-          {/* MANUAL ENTRY VIEW */}
+          {/* MANUAL ENTRY VIEW (NO DUMMY DATA) */}
           {scannerMode === 'MANUAL' && (
             <form
               onSubmit={(e) => {
@@ -422,7 +593,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
                     type="text"
                     value={scanInput}
                     onChange={(e) => setScanInput(e.target.value)}
-                    placeholder="e.g. BUNK-000001, TANK-000001, NOZZ-000001"
+                    placeholder="Enter Bunk Code, Tank ID, or Nozzle ID..."
                     autoFocus
                     className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 py-2.5 pl-9 pr-3 text-xs font-mono font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
                   />
@@ -437,27 +608,24 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
                 </button>
               </div>
 
-              {/* Sample Tag Shortcuts */}
-              <div className="space-y-1 pt-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Quick Testing Tags:
-                </span>
-                <div className="flex flex-wrap gap-1.5 text-xs">
-                  {['BUNK-000001', 'BUNK-000002', 'TANK-000001', 'TANK-000002', 'NOZZ-000001', 'NOZZ-000002'].map((id) => (
+              {stations.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  <span className="font-semibold text-[10px] uppercase">Quick Select:</span>
+                  {stations.slice(0, 3).map((st) => (
                     <button
-                      key={id}
+                      key={st.id}
                       type="button"
                       onClick={() => {
-                        setScanInput(id);
-                        handleResolveCode(id);
+                        setScanInput(st.code);
+                        handleResolveCode(st.code);
                       }}
-                      className="px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 text-[11px] font-mono text-slate-600 dark:text-slate-300 hover:border-emerald-500 hover:text-emerald-600 transition cursor-pointer"
+                      className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] hover:bg-emerald-500/10 hover:text-emerald-600 transition cursor-pointer"
                     >
-                      {id}
+                      {st.name}
                     </button>
                   ))}
                 </div>
-              </div>
+              )}
             </form>
           )}
 
@@ -518,33 +686,53 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
                 )}
               </div>
 
-              {/* Navigation Action Buttons */}
-              <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-                {resolvedResult.type === 'NOZZLE' && (
+              {/* Permission Verification Alert */}
+              {!isPermitted && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2.5">
+                  <ShieldAlert className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="block font-semibold">Permission Restricted</strong>
+                    <span>
+                      You do not have permission to access assets for station{' '}
+                      <strong>{resolvedResult.parentStation?.name || 'this forecourt'}</strong>. Only authorized staff assigned to this bunk can view or operate on it.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Navigation Action Buttons (Gated by Permission) */}
+              {isPermitted ? (
+                <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                  {resolvedResult.type === 'NOZZLE' && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAction('READING')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 transition shadow-xs cursor-pointer"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Enter Nozzle Reading
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => handleOpenAction('READING')}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 transition shadow-xs cursor-pointer"
+                    onClick={() => handleOpenAction('DETAILS')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition cursor-pointer"
                   >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    Enter Nozzle Reading
+                    View Forecourt Details
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleOpenAction('DETAILS')}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition cursor-pointer"
-                >
-                  View Forecourt Details
-                </button>
-              </div>
+                </div>
+              ) : (
+                <div className="text-right text-[11px] text-slate-400 italic">
+                  Navigation disabled due to insufficient privileges.
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* Footer info banner */}
         <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 flex items-center justify-between text-[11px] text-slate-400">
-          <span>Camera automatically stops on detection or modal dismissal.</span>
+          <span>Local scanning supported via camera or image upload.</span>
           <button
             type="button"
             onClick={handleSafeClose}

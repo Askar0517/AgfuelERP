@@ -210,7 +210,7 @@ export const BunkFormPage: React.FC<BunkFormPageProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-12">
+    <div className="space-y-3.5 animate-fadeIn pb-12">
       {/* Standard Unified Breadcrumbs & Action Bar */}
       <Breadcrumbs
         items={[
@@ -310,22 +310,17 @@ export const BunkFormPage: React.FC<BunkFormPageProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Authoritative Bunk Code
+                Bunk Code
               </label>
               <div className="flex items-center px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-700 dark:text-slate-300 select-all">
                 {mode === 'EDIT' ? (
                   <span className="font-bold text-slate-900 dark:text-white">{code}</span>
                 ) : (
                   <span className="text-slate-500 dark:text-slate-400 italic">
-                    Assigned authoritatively by backend (e.g. BUNK-000001)
+                    Generated automatically upon creation (e.g. BUNK-000001)
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">
-                {mode === 'EDIT'
-                  ? 'Bunk code is immutable after provisioning to preserve database audit integrity.'
-                  : 'Codes are generated exclusively by the backend database sequence to guarantee uniqueness.'}
-              </p>
             </div>
           </div>
         </div>
@@ -393,6 +388,7 @@ export const BunkFormPage: React.FC<BunkFormPageProps> = ({
               <input
                 type="text"
                 name="postalCode"
+                inputMode="numeric"
                 placeholder="e.g. 562110"
                 value={postalCode}
                 onChange={(e) => setPostalCode(e.target.value)}
@@ -407,6 +403,7 @@ export const BunkFormPage: React.FC<BunkFormPageProps> = ({
               <input
                 type="tel"
                 name="phone"
+                inputMode="tel"
                 required
                 placeholder="+91 98765 43210"
                 value={phone}
@@ -432,6 +429,7 @@ export const BunkFormPage: React.FC<BunkFormPageProps> = ({
               <input
                 type="email"
                 name="email"
+                inputMode="email"
                 placeholder="station.devanahalli@petropulse.io"
                 value={email}
                 onChange={(e) => {
@@ -456,6 +454,7 @@ export const BunkFormPage: React.FC<BunkFormPageProps> = ({
               <input
                 type="number"
                 step="0.000001"
+                inputMode="decimal"
                 placeholder="13.248301"
                 value={latitude}
                 onChange={(e) => setLatitude(e.target.value)}
@@ -470,6 +469,7 @@ export const BunkFormPage: React.FC<BunkFormPageProps> = ({
               <input
                 type="number"
                 step="0.000001"
+                inputMode="decimal"
                 placeholder="77.712610"
                 value={longitude}
                 onChange={(e) => setLongitude(e.target.value)}
@@ -498,31 +498,29 @@ export const BunkFormPage: React.FC<BunkFormPageProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <SelectDropdown
-                label="Station Manager Assignment"
-                placeholder="Select a registered Manager from User Master..."
+                label="Station Manager"
+                placeholder="Select manager..."
                 options={managerOptions}
                 value={managerId}
                 onChange={handleManagerChange}
                 searchable={true}
-                helpText="Select an active manager profile to manage shift rosters, dip logs, and EOD reconciliations."
               />
             </div>
 
             <div>
               <SelectDropdown
                 label="Operating Schedule"
-                placeholder="Select station operating hours..."
+                placeholder="Select operating hours..."
                 options={operatingHoursOptions}
                 value={operatingHours}
                 onChange={setOperatingHours}
                 searchable={false}
-                helpText="Determines automated shift schedules and midnight meter roll-over timings."
               />
             </div>
 
             <div>
               <SelectDropdown
-                label="Operational Timezone"
+                label="Timezone"
                 placeholder="Select timezone..."
                 options={timezoneOptions}
                 value={timezone}
@@ -533,25 +531,23 @@ export const BunkFormPage: React.FC<BunkFormPageProps> = ({
                   }
                 }}
                 searchable={false}
-                helpText="Ensures legal metrology compliance timestamps align with station jurisdiction."
               />
             </div>
 
             <div>
               <SelectDropdown
-                label="Operating Currency"
+                label="Currency"
                 placeholder="Select currency..."
                 options={currencyOptions}
                 value={currency}
                 onChange={setCurrency}
                 searchable={false}
-                helpText="Currency used for fuel rates, cashier shift totals, and accounting reconciliation."
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                End-Of-Day (EOD) Auto-Close Time
+                Daily Auto-Close Time
               </label>
               <input
                 type="time"
@@ -559,9 +555,6 @@ export const BunkFormPage: React.FC<BunkFormPageProps> = ({
                 onChange={(e) => setEodCloseTime(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-[#194C47] text-xs font-mono text-slate-900 dark:text-white focus:border-[#12544F] dark:focus:border-[#2BA096] focus:outline-hidden transition"
               />
-              <p className="mt-1 text-[11px] text-slate-400">
-                Daily cutoff time when sales reconciliation and automated shift settlement trigger.
-              </p>
             </div>
           </div>
         </div>

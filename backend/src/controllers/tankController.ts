@@ -81,8 +81,10 @@ export const tankController = {
 
   decantLoad: async (req: Request, res: Response) => {
     try {
+      const user = (req as any).user;
       const result = await dbService.decantTankerLoad({
         tankId: req.params.id,
+        operatorName: user?.name || user?.username || req.body.operatorName || 'Administrator',
         ...req.body,
       });
       res.json(result);

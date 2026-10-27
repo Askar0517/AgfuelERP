@@ -72,7 +72,7 @@ interface BunksViewProps {
   currentRole: UserRole;
   currentStationId: string;
   onSelectStation: (id: string) => void;
-  onCreateBunk: (payload: any) => Promise<void>;
+  onCreateBunk: (payload: any) => Promise<any>;
   onUpdateBunk: (id: string, payload: any) => Promise<void>;
   onDeactivateBunk: (id: string) => Promise<void>;
   onDeleteBunk?: (id: string) => Promise<void>;
@@ -122,6 +122,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
 
   // Navigation / Detailed view state
   const [selectedBunkId, setSelectedBunkId] = useState<string | null>(null);
+  const [newlyCreatedBunkId, setNewlyCreatedBunkId] = useState<string | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<'overview' | 'tanks' | 'nozzles' | 'staff' | 'configuration'>('overview');
 
   // Search & Filtering
@@ -130,7 +131,6 @@ export const BunksView: React.FC<BunksViewProps> = ({
 
   // Modals & Forms & Page Navigation
   const [viewMode, setViewMode] = useState<'LIST' | 'ADD' | 'EDIT'>('LIST');
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingStation, setEditingStation] = useState<Station | null>(null);
   const [deactivatingStation, setDeactivatingStation] = useState<Station | null>(null);
   const [deletingStation, setDeletingStation] = useState<Station | null>(null);
@@ -163,6 +163,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
   const [deletingNozzle, setDeletingNozzle] = useState<Nozzle | null>(null);
   const [blockedNozzleDelete, setBlockedNozzleDelete] = useState<{ nozzle: Nozzle; reason: string } | null>(null);
   const [nozzleFieldErrors, setNozzleFieldErrors] = useState<Record<string, string>>({});
+  const [nozzleViewLayout, setNozzleViewLayout] = useState<'TABLE' | 'FORECOURT'>('TABLE');
   const [nozzleFormData, setNozzleFormData] = useState({
     nozzleNumber: '',
     name: '',
@@ -175,41 +176,20 @@ export const BunksView: React.FC<BunksViewProps> = ({
     notes: '',
   });
 
-  const formRef = useRef<HTMLFormElement>(null);
   const nozzleFormRef = useRef<HTMLFormElement>(null);
-
-  // Form State
-  const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    address: '',
-    cityState: '',
-    postalCode: '',
-    phone: '',
-    email: '',
-    latitude: '',
-    longitude: '',
-    managerId: '',
-    managerName: '',
-    operatingHours: '24_HOURS',
-    timezone: 'Asia/Kolkata',
-    eodCloseTime: '23:59',
-    status: 'ONLINE',
-    notes: '',
-  });
 
   const eligibleManagers = employees.filter(
     (e) => (e.isActive || e.status === 'ACTIVE') && (e.role === 'MANAGER' || e.role === 'OWNER')
   );
 
   const supportedTimezones = [
-    { value: 'Asia/Kolkata', label: 'Asia/Kolkata (IST +05:30) \u00B7 India Standard Time' },
-    { value: 'Asia/Dubai', label: 'Asia/Dubai (GST +04:00) \u00B7 Gulf Standard Time' },
-    { value: 'Asia/Riyadh', label: 'Asia/Riyadh (AST +03:00) \u00B7 Arabia Standard Time' },
-    { value: 'Asia/Singapore', label: 'Asia/Singapore (SGT +08:00) \u00B7 Singapore Standard Time' },
-    { value: 'Europe/London', label: 'Europe/London (GMT/BST +00:00/+01:00) \u00B7 UK Standard Time' },
-    { value: 'America/New_York', label: 'America/New_York (EST/EDT -05:00/-04:00) \u00B7 US Eastern Time' },
-    { value: 'UTC', label: 'UTC (UTC +00:00) \u00B7 Coordinated Universal Time' },
+    { value: 'Asia/Kolkata', label: 'Asia/Kolkata (IST +05:30) · India Standard Time' },
+    { value: 'Asia/Dubai', label: 'Asia/Dubai (GST +04:00) · Gulf Standard Time' },
+    { value: 'Asia/Riyadh', label: 'Asia/Riyadh (AST +03:00) · Arabia Standard Time' },
+    { value: 'Asia/Singapore', label: 'Asia/Singapore (SGT +08:00) · Singapore Standard Time' },
+    { value: 'Europe/London', label: 'Europe/London (GMT/BST +00:00/+01:00) · UK Standard Time' },
+    { value: 'America/New_York', label: 'America/New_York (EST/EDT -05:00/-04:00) · US Eastern Time' },
+    { value: 'UTC', label: 'UTC (UTC +00:00) · Coordinated Universal Time' },
   ];
 
   const canManageBunks = currentRole === 'OWNER';
@@ -262,85 +242,6 @@ export const BunksView: React.FC<BunksViewProps> = ({
     setViewMode('EDIT');
   };
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Centralized validation check
-    const validation = validateBunkForm({
-      name: formData.name,
-      code: formData.code,
-      address: formData.address,
-      cityState: formData.cityState,
-      postalCode: formData.postalCode,
-      phone: formData.phone,
-      email: formData.email,
-      latitude: formData.latitude,
-      longitude: formData.longitude,
-      managerName: formData.managerName,
-      operatingHours: formData.operatingHours,
-    });
-
-    // Check duplicate code client-side
-    const codeClean = formData.code.trim().toUpperCase();
-    const isDup = stations.some(
-      (s) => s.code.toUpperCase() === codeClean && (!editingStation || s.id !== editingStation.id)
-    );
-    if (isDup) {
-      validation.errors.code = `A bunk with code "${codeClean}" already exists.`;
-      validation.isValid = false;
-    }
-
-    if (!validation.isValid) {
-      setFieldErrors(validation.errors);
-      notifyValidation(
-        'Validation Errors',
-        'Please correct the highlighted fields before saving.',
-        Object.values(validation.errors)
-      );
-      setTimeout(() => focusFirstInvalidField(formRef.current), 50);
-      return;
-    }
-
-    setIsSubmitting(true);
-    setFieldErrors({});
-
-    const payload = {
-      name: formData.name.trim(),
-      code: codeClean,
-      address: formData.address.trim(),
-      cityState: formData.cityState.trim(),
-      postalCode: formData.postalCode.trim(),
-      phone: formData.phone.trim() || '+91 90000 00000',
-      email: formData.email.trim(),
-      latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
-      longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
-      managerId: formData.managerId || undefined,
-      managerName: formData.managerName.trim() || 'Unassigned',
-      operatingHours: formData.operatingHours,
-      timezone: formData.timezone || 'Asia/Kolkata',
-      eodCloseTime: formData.eodCloseTime || '23:59',
-      status: formData.status,
-      notes: formData.notes.trim(),
-      location: formData.cityState.trim() || formData.address.trim() || 'Forecourt Zone',
-    };
-
-    try {
-      if (editingStation) {
-        await onUpdateBunk(editingStation.id, payload);
-        notifySuccess('Bunk Updated', `Successfully updated configuration for "${payload.name}".`);
-      } else {
-        await onCreateBunk(payload);
-        notifySuccess('Bunk Created', `Fuel bunk "${payload.name}" (${payload.code}) provisioned in database.`);
-      }
-      setIsAddModalOpen(false);
-      setEditingStation(null);
-    } catch (err: any) {
-      setFieldErrors({ form: err.message || 'Failed to save bunk configuration.' });
-      notifyError('Save Failed', err.message || 'Database error occurred.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleConfirmDeactivate = async () => {
     if (!deactivatingStation) return;
@@ -547,8 +448,13 @@ export const BunksView: React.FC<BunksViewProps> = ({
         employees={employees}
         currentRole={currentRole}
         onSave={async (payload) => {
-          await onCreateBunk(payload);
+          const created: any = await onCreateBunk(payload);
           setViewMode('LIST');
+          if (created && created.id) {
+            setSelectedBunkId(created.id);
+            setActiveDetailTab('tanks');
+            setNewlyCreatedBunkId(created.id);
+          }
         }}
         onCancel={() => setViewMode('LIST')}
       />
@@ -565,7 +471,6 @@ export const BunksView: React.FC<BunksViewProps> = ({
         currentRole={currentRole}
         onSave={async (payload, id) => {
           await onUpdateBunk(id || editingStation.id, payload);
-          notifySuccess('Bunk Updated', `Bunk "${payload.name}" updated successfully.`);
           setViewMode('LIST');
           setEditingStation(null);
         }}
@@ -625,7 +530,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                   type: 'BUNK',
                   id: activeBunk.code || activeBunk.id,
                   name: activeBunk.name,
-                  subtitle: `${activeBunk.location} \u00B7 ${bunkTanks.length} Tanks \u00B7 ${bunkNozzles.length} Nozzles`,
+                  subtitle: `${activeBunk.location} · ${bunkTanks.length} Tanks · ${bunkNozzles.length} Nozzles`,
                 })
               }
               className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer shadow-2xs"
@@ -684,6 +589,45 @@ export const BunksView: React.FC<BunksViewProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Guided Setup Callout for newly provisioned bunk */}
+        {newlyCreatedBunkId === selectedBunkId && (
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-50/90 dark:bg-emerald-950/40 p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-xs sm:text-sm font-bold text-emerald-950 dark:text-emerald-200">
+                  Fuel Bunk &ldquo;{activeBunk.name}&rdquo; Provisioned Successfully!
+                </h3>
+                <p className="text-[11px] sm:text-xs text-emerald-700 dark:text-emerald-400">
+                  Next Setup Step: Configure underground fuel storage tanks to receive fuel tanker loads.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setNewlyCreatedBunkId(null)}
+                className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer"
+              >
+                Dismiss
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddTankModalOpen(true);
+                  setNewlyCreatedBunkId(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-[#12544F] hover:bg-[#0E433F] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                Add First Tank
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Tab Navigation */}
         <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#194C47] overflow-x-auto">
@@ -838,7 +782,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                               </span>
                             </div>
                             <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                              Dip: {tank.currentDipCm} cm \u00B7 Water: {tank.waterDipCm} cm
+                              Dip: {tank.currentDipCm} cm · Water: {tank.waterDipCm} cm
                             </span>
                           </div>
                           <div className="text-right">
@@ -1000,6 +944,31 @@ export const BunksView: React.FC<BunksViewProps> = ({
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setNozzleViewLayout('TABLE')}
+                    className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer ${
+                      nozzleViewLayout === 'TABLE'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs font-semibold'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    Table View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNozzleViewLayout('FORECOURT')}
+                    className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer flex items-center gap-1 ${
+                      nozzleViewLayout === 'FORECOURT'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs font-semibold'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Layers className="w-3 h-3" />
+                    <span>Forecourt Layout</span>
+                  </button>
+                </div>
                 <button
                   onClick={openInlineAddNozzle}
                   className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs"
@@ -1007,14 +976,6 @@ export const BunksView: React.FC<BunksViewProps> = ({
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Nozzle</span>
                 </button>
-                {onNavigateToNozzles && (
-                  <button
-                    onClick={() => onNavigateToNozzles(activeBunk.id)}
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium cursor-pointer"
-                  >
-                    Forecourt View
-                  </button>
-                )}
               </div>
             </div>
 
@@ -1033,10 +994,130 @@ export const BunksView: React.FC<BunksViewProps> = ({
                   <span>Add First Nozzle</span>
                 </button>
               </div>
+            ) : nozzleViewLayout === 'FORECOURT' ? (
+              /* Inline Forecourt Dispenser Layout */
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {(() => {
+                  const groupedMap = new Map<
+                    string,
+                    {
+                      dispenserNumber: number;
+                      islandNumber: number;
+                      brand: string;
+                      nozzles: typeof bunkNozzles;
+                    }
+                  >();
+
+                  bunkNozzles.forEach((nz) => {
+                    const dp = dispensers.find((d) => d.id === nz.dispenserId);
+                    const dispKey = nz.dispenserId || `disp-${nz.dispenserNumber || 1}`;
+                    if (!groupedMap.has(dispKey)) {
+                      groupedMap.set(dispKey, {
+                        dispenserNumber: dp?.dispenserNumber || nz.dispenserNumber || 1,
+                        islandNumber: dp?.islandNumber || 1,
+                        brand: dp?.brand || 'Dispenser MPD',
+                        nozzles: [],
+                      });
+                    }
+                    groupedMap.get(dispKey)!.nozzles.push(nz);
+                  });
+
+                  return Array.from(groupedMap.entries()).map(([key, group]) => (
+                    <div
+                      key={key}
+                      className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-2xs hover:shadow-md transition-all"
+                    >
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                            <Fuel className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                              Dispenser #{group.dispenserNumber}
+                            </h4>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                              Island #{group.islandNumber} · {group.brand}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono">
+                          {group.nozzles.length} Nozzles
+                        </span>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {group.nozzles.map((nz) => {
+                          const fuelDef = getFuelDefinition(nz.fuelCode);
+                          return (
+                            <div
+                              key={nz.id}
+                              className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs"
+                            >
+                              <div className="min-w-0 flex-1 pr-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-bold text-slate-900 dark:text-white">
+                                    Nozzle #{nz.nozzleNumber}
+                                  </span>
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border"
+                                    style={{
+                                      backgroundColor: `${fuelDef.color}15`,
+                                      borderColor: `${fuelDef.color}35`,
+                                      color: fuelDef.color,
+                                    }}
+                                  >
+                                    <span
+                                      className="w-1.5 h-1.5 rounded-full"
+                                      style={{ backgroundColor: fuelDef.color }}
+                                    />
+                                    {fuelDef.name}
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-1">
+                                  Totalizer: {nz.electronicTotalizer.toLocaleString()} L
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => openInlineEditNozzle(nz)}
+                                  className="px-2 py-1 rounded-md text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 cursor-pointer"
+                                >
+                                  Edit
+                                </button>
+                                {nz.status === 'ACTIVE' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeactivatingNozzle({ nozzle: nz, targetStatus: 'INACTIVE' })}
+                                    className="px-2 py-1 rounded-md text-[11px] font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 cursor-pointer"
+                                  >
+                                    Off
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeactivatingNozzle({ nozzle: nz, targetStatus: 'ACTIVE' })}
+                                    className="px-2 py-1 rounded-md text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer"
+                                  >
+                                    On
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
             ) : (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900 shadow-2xs">
+              /* Inline Table View */
+              <div className="rounded-xl border border-[#D4E8E5] dark:border-[#194C47] overflow-hidden bg-white dark:bg-slate-900 shadow-2xs">
                 <table className="w-full text-xs text-left">
-                  <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 uppercase tracking-wider font-semibold border-b border-slate-200 dark:border-slate-800">
+                  <thead className="bg-[#EAF4F3] dark:bg-[#0A2623] text-[#0E3D38] dark:text-[#5EEAD4] uppercase tracking-wider font-bold border-b border-[#D4E8E5] dark:border-[#194C47]">
                     <tr>
                       <th className="px-4 py-3">Nozzle</th>
                       <th className="px-4 py-3">Fuel Type</th>
@@ -1053,7 +1134,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                       return (
                         <tr key={nz.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
                           <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">
-                            #{nz.nozzleNumber} {nz.name ? `\u00B7 ${nz.name}` : ''}
+                            #{nz.nozzleNumber} {nz.name ? `· ${nz.name}` : ''}
                           </td>
                           <td className="px-4 py-3">
                             {(() => {
@@ -1334,15 +1415,13 @@ export const BunksView: React.FC<BunksViewProps> = ({
 
                 <div>
                   <SelectDropdown
-                    label="Feeder Tank (Underground)"
+                    label="Fuel Tank"
                     placeholder="Select feeder tank..."
                     options={[
                       { value: '', label: 'Direct / Unassigned' },
                       ...bunkTanks.map((t) => ({
                         value: t.id,
-                        label: `Tank #${t.tankNumber}: ${t.name || t.id}`,
-                        badge: t.fuelCode,
-                        description: `Grade: ${t.fuelCode} \u00B7 Cap: ${t.capacityLiters.toLocaleString()} L`,
+                        label: `Tank #${t.tankNumber} (${t.fuelCode})`,
                       })),
                     ]}
                     value={nozzleFormData.tankId}
@@ -1366,11 +1445,6 @@ export const BunksView: React.FC<BunksViewProps> = ({
                     label="Fuel Product"
                     required
                     disabled={Boolean(nozzleFormData.tankId)}
-                    helpText={
-                      nozzleFormData.tankId
-                        ? 'Locked to feeder tank to prevent fuel cross-contamination.'
-                        : 'Select fuel product'
-                    }
                     placeholder="Select fuel product..."
                     options={FUEL_SELECT_OPTIONS}
                     value={nozzleFormData.fuelCode}
@@ -1381,11 +1455,11 @@ export const BunksView: React.FC<BunksViewProps> = ({
 
                 <div>
                   <SelectDropdown
-                    label="Operational Status"
+                    label="Status"
                     options={[
-                      { value: 'ACTIVE', label: 'Active (Dispensing Allowed)', badge: 'ACTIVE' },
-                      { value: 'UNDER_MAINTENANCE', label: 'Under Maintenance', badge: 'MAINTENANCE' },
-                      { value: 'INACTIVE', label: 'Inactive (Disabled)', badge: 'INACTIVE' },
+                      { value: 'ACTIVE', label: 'Active' },
+                      { value: 'UNDER_MAINTENANCE', label: 'Under Maintenance' },
+                      { value: 'INACTIVE', label: 'Inactive' },
                     ]}
                     value={nozzleFormData.status}
                     onChange={(val) => setNozzleFormData({ ...nozzleFormData, status: val })}
@@ -1398,11 +1472,11 @@ export const BunksView: React.FC<BunksViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
-                    Nozzle Name / Label <span className="text-slate-400 font-normal">(Optional)</span>
+                    Nozzle Label <span className="text-slate-400 font-normal">(Optional)</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Pump 1 Diesel High-Flow"
+                    placeholder="e.g. Pump 1 High-Flow"
                     value={nozzleFormData.name}
                     onChange={(e) => setNozzleFormData({ ...nozzleFormData, name: e.target.value })}
                     className="w-full h-9 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs"
@@ -1411,11 +1485,11 @@ export const BunksView: React.FC<BunksViewProps> = ({
 
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
-                    Meter / Device ID <span className="text-slate-400 font-normal">(Optional)</span>
+                    Device ID <span className="text-slate-400 font-normal">(Optional)</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. NZ-101-A"
+                    placeholder="e.g. NZ-01"
                     value={nozzleFormData.deviceIdentifier}
                     onChange={(e) => setNozzleFormData({ ...nozzleFormData, deviceIdentifier: e.target.value })}
                     className="w-full h-9 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono text-xs"
@@ -1427,7 +1501,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
-                    Electronic Totalizer (Liters) <span className="text-emerald-600 font-normal">(Locked \u00B7 Initial Register)</span>
+                    Opening Reading (Liters)
                   </label>
                   <input
                     type="number"
@@ -1436,21 +1510,17 @@ export const BunksView: React.FC<BunksViewProps> = ({
                     value={nozzleFormData.initialTotalizer}
                     className="w-full h-9 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-mono text-xs cursor-not-allowed"
                   />
-                  <span className="text-[10px] text-slate-400 mt-1 block">
-                    Starts at 0.00 L. Totalizer strictly increments via authorized meter entries and shift dispensing.
-                  </span>
                 </div>
 
                 <div>
                   <SelectDropdown
-                    label="Dispenser / Pump Unit"
-                    placeholder="Select dispenser pump..."
+                    label="Dispenser"
+                    placeholder="Select dispenser..."
                     options={dispensers
                       .filter((d) => d.stationId === activeBunk?.id)
                       .map((d) => ({
                         value: d.id,
                         label: `Pump #${d.dispenserNumber} (Island ${d.islandNumber})`,
-                        description: d.brand,
                       }))}
                     value={nozzleFormData.dispenserId}
                     onChange={(val) => setNozzleFormData({ ...nozzleFormData, dispenserId: val })}
@@ -1499,7 +1569,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
         />
       </div>
     ) : (
-      <div className="space-y-5">
+      <div className="space-y-3.5">
         {/* Breadcrumb Navigation & Action Bar */}
         <Breadcrumbs
           items={[
@@ -1552,10 +1622,10 @@ export const BunksView: React.FC<BunksViewProps> = ({
       </div>
 
       {/* Bunks Table */}
-      <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900 shadow-2xs">
+      <div className="rounded-xl border border-[#D4E8E5] dark:border-[#194C47] overflow-hidden bg-white dark:bg-slate-900 shadow-2xs">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
-            <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 uppercase tracking-wider font-semibold border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-[#EAF4F3] dark:bg-[#0A2623] text-[#0E3D38] dark:text-[#5EEAD4] uppercase tracking-wider font-bold border-b border-[#D4E8E5] dark:border-[#194C47]">
               <tr>
                 <th className="px-4 py-3">Bunk Name & Code</th>
                 <th className="px-4 py-3">Location</th>
@@ -1607,7 +1677,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                         </span>
                         {station.cityState && (
                           <span className="text-[11px] text-slate-400 block truncate">
-                            {station.cityState} {station.postalCode ? `\u00B7 ${station.postalCode}` : ''}
+                            {station.cityState} {station.postalCode ? `· ${station.postalCode}` : ''}
                           </span>
                         )}
                       </td>
@@ -1676,7 +1746,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                                 type: 'BUNK',
                                 id: station.code || station.id,
                                 name: station.name,
-                                subtitle: `${station.location} \u00B7 ${stationNozzleCount} Nozzles`,
+                                subtitle: `${station.location} · ${stationNozzleCount} Nozzles`,
                               })
                             }
                             className="p-1 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
@@ -1911,7 +1981,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                   Cannot Delete Nozzle #{blockedNozzleDelete.nozzle.nozzleNumber}
                 </h3>
                 <span className="text-xs text-slate-500 font-mono">
-                  {blockedNozzleDelete.nozzle.fuelCode} \u00B7 Totalizer: {blockedNozzleDelete.nozzle.electronicTotalizer.toLocaleString()} L
+                  {blockedNozzleDelete.nozzle.fuelCode} · Totalizer: {blockedNozzleDelete.nozzle.electronicTotalizer.toLocaleString()} L
                 </span>
               </div>
             </div>
@@ -1968,7 +2038,7 @@ export const BunksView: React.FC<BunksViewProps> = ({
                   Delete Nozzle #{deletingNozzle.nozzleNumber}?
                 </h3>
                 <span className="text-xs text-slate-500 font-mono">
-                  {deletingNozzle.fuelCode} \u00B7 Totalizer: 0.00 L
+                  {deletingNozzle.fuelCode} · Totalizer: 0.00 L
                 </span>
               </div>
             </div>

@@ -7,23 +7,42 @@ import { api } from '../api/client';
 
 interface DSRViewProps {
   station: Station;
+  stations?: Station[];
   dsr: DailySalesReport | null;
   tanks?: Tank[];
   fuels?: FuelProduct[];
   readings?: ManualMeterReading[];
+  onSelectStation?: (stationId: string) => void;
   onSelectDate: (date: string) => Promise<void>;
   onRefresh: () => void;
 }
 
 export const DSRView: React.FC<DSRViewProps> = ({
   station,
+  stations = [],
   dsr: initialDsr,
   tanks = [],
   fuels = [],
   readings = [],
+  onSelectStation,
   onSelectDate,
   onRefresh,
 }) => {
+  const [activeStationId, setActiveStationId] = useState<string>(station.id);
+  const activeStation =
+    (stations.length > 0 ? stations.find((s) => s.id === activeStationId) : station) || station;
+
+  useEffect(() => {
+    if (station?.id && station.id !== activeStationId) {
+      setActiveStationId(station.id);
+    }
+  }, [station?.id]);
+
+  const handleStationChange = (id: string) => {
+    setActiveStationId(id);
+    if (onSelectStation) onSelectStation(id);
+  };
+
   const [selectedDate, setSelectedDate] = useState(
     initialDsr?.date || new Date().toISOString().split('T')[0]
   );
@@ -46,14 +65,14 @@ export const DSRView: React.FC<DSRViewProps> = ({
   }, []);
 
   useEffect(() => {
-    fetchDSRFromDB(selectedDate, station.id);
-  }, [selectedDate, station.id, fetchDSRFromDB]);
+    fetchDSRFromDB(selectedDate, activeStation.id);
+  }, [selectedDate, activeStation.id, fetchDSRFromDB]);
 
   // Compute fallback DSR if database call not yet returned
   const computedDsr: DailySalesReport = dbDsr || initialDsr || (() => {
     const fuelSummaries = fuels.map((f) => {
-      const tank = tanks.find((t) => t.stationId === station.id && t.fuelCode === f.code);
-      const fuelReadings = readings.filter((r) => r.stationId === station.id && r.fuelCode === f.code);
+      const tank = tanks.find((t) => t.stationId === activeStation.id && t.fuelCode === f.code);
+      const fuelReadings = readings.filter((r) => r.stationId === activeStation.id && r.fuelCode === f.code);
 
       const meterSales = fuelReadings.reduce((sum, r) => sum + r.netSoldLiters, 0);
       const testing = fuelReadings.reduce((sum, r) => sum + r.testingLiters, 0);
@@ -83,8 +102,8 @@ export const DSRView: React.FC<DSRViewProps> = ({
     const totalVol = fuelSummaries.reduce((s, f) => s + f.meterSalesLiters, 0);
 
     return {
-      id: `dsr-${station.id}-${selectedDate}`,
-      stationId: station.id,
+      id: `dsr-${activeStation.id}-${selectedDate}`,
+      stationId: activeStation.id,
       date: selectedDate,
       status: 'VERIFIED',
       fuelSummaries,
@@ -95,23 +114,23 @@ export const DSRView: React.FC<DSRViewProps> = ({
       totalCreditCollected: Math.round(totalRev * 0.10),
       totalActualDeposits: totalRev,
       settlementDifference: 0,
-      auditorNotes: 'Daily stock and cash records certified in compliance with Legal Metrology Form VIII.',
+      auditorNotes: 'Daily stock movements, meter totalizers, and cash records verified in compliance with forecourt operating standards.',
     };
   })();
 
   const handleDateChange = async (date: string) => {
     setSelectedDate(date);
     await onSelectDate(date);
-    await fetchDSRFromDB(date, station.id);
+    await fetchDSRFromDB(date, activeStation.id);
   };
 
   const handleManualRefresh = async () => {
     onRefresh();
-    await fetchDSRFromDB(selectedDate, station.id);
+    await fetchDSRFromDB(selectedDate, activeStation.id);
   };
 
   return (
-    <div className="space-y-6 pb-12 sm:pb-6">
+    <div className="space-y-3.5 pb-12 sm:pb-6 animate-fadeIn">
       {/* Breadcrumb Navigation & Controls */}
       <Breadcrumbs
         items={[
@@ -120,11 +139,11 @@ export const DSRView: React.FC<DSRViewProps> = ({
         ]}
         badge={
           <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-            {station.name} ({station.code})
+            {activeStation.name} ({activeStation.code})
           </span>
         }
         actions={
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
             <div className="relative">
               <input
                 type="date"
@@ -153,7 +172,7 @@ export const DSRView: React.FC<DSRViewProps> = ({
       />
 
       {/* DSR Print & Visual Sheet */}
-      <DSRSheet dsr={computedDsr} station={station} onRefresh={onRefresh} />
+      <DSRSheet dsr={computedDsr} station={activeStation} onRefresh={onRefresh} />
     </div>
   );
 };

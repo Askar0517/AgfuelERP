@@ -21,6 +21,8 @@ import {
   ChevronRight,
   UserCheck,
   UserX,
+  RotateCcw,
+  X,
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { ConfirmationModal } from '../components/common/ConfirmationModal';
@@ -315,7 +317,7 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
   // Default view: Full User Grid / Table
   return (
-    <div className="space-y-5 animate-fadeIn pb-12">
+    <div className="space-y-3.5 animate-fadeIn pb-12">
       {/* Breadcrumb Navigation & Action Bar */}
       <Breadcrumbs
         items={[
@@ -338,58 +340,82 @@ export const UsersView: React.FC<UsersViewProps> = ({
 
       {/* Filter and Search Bar using polished dropdowns */}
       <div className="p-4 rounded-2xl bg-white dark:bg-[#0D2926] border border-slate-200 dark:border-[#194C47] shadow-2xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 text-xs">
           {/* Search Box */}
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
+          <div className="col-span-12 sm:col-span-6 lg:col-span-4">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
               Search Users
             </label>
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <div className="relative flex items-center">
+              <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search by name, email, phone..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 text-xs"
+                className="w-full h-[38px] min-h-[38px] pl-9 pr-8 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-[#194C47] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-[#12544F]/30 focus:border-[#12544F] text-xs transition-all shadow-2xs"
               />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
 
           {/* Role Filter */}
-          <SelectDropdown
-            label="Filter by Role"
-            options={roleFilterOptions}
-            value={roleFilter}
-            onChange={(val) => setRoleFilter(val)}
-            searchable={false}
-          />
+          <div className="col-span-6 sm:col-span-3 lg:col-span-3">
+            <SelectDropdown
+              label="Filter by Role"
+              options={roleFilterOptions}
+              value={roleFilter}
+              onChange={(val) => setRoleFilter(val)}
+              searchable={false}
+            />
+          </div>
 
           {/* Bunk Station Filter */}
-          <SelectDropdown
-            label="Filter by Assigned Station"
-            options={bunkFilterOptions}
-            value={bunkFilter}
-            onChange={(val) => setBunkFilter(val)}
-            searchable={stations.length > 4}
-          />
+          <div className="col-span-6 sm:col-span-3 lg:col-span-3">
+            <SelectDropdown
+              label="Filter by Assigned Station"
+              options={bunkFilterOptions}
+              value={bunkFilter}
+              onChange={(val) => setBunkFilter(val)}
+              searchable={stations.length > 4}
+            />
+          </div>
 
           {/* Status Filter */}
-          <SelectDropdown
-            label="Filter by Status"
-            options={statusFilterOptions}
-            value={statusFilter}
-            onChange={(val) => setStatusFilter(val)}
-            searchable={false}
-          />
+          <div className="col-span-12 sm:col-span-6 lg:col-span-2">
+            <SelectDropdown
+              label="Filter by Status"
+              options={statusFilterOptions}
+              value={statusFilter}
+              onChange={(val) => setStatusFilter(val)}
+              searchable={false}
+            />
+          </div>
         </div>
 
-        {/* Filter Summary */}
-        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-1">
-          <span>
-            Showing <strong className="text-slate-800 dark:text-slate-200">{filteredEmployees.length}</strong> of{' '}
-            {accessibleEmployees.length} accessible user accounts
-          </span>
+        {/* Filter Summary & Quick Reset */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-slate-100 dark:border-[#194C47]/50 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 dark:text-slate-400">
+              Showing <strong className="text-slate-900 dark:text-slate-100 font-bold">{filteredEmployees.length}</strong> of{' '}
+              {accessibleEmployees.length} accessible user accounts
+            </span>
+            {(searchTerm || roleFilter !== 'ALL' || bunkFilter !== 'ALL' || statusFilter !== 'ALL') && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                Filtered Active
+              </span>
+            )}
+          </div>
+
           {(searchTerm || roleFilter !== 'ALL' || bunkFilter !== 'ALL' || statusFilter !== 'ALL') && (
             <button
               type="button"
@@ -399,19 +425,20 @@ export const UsersView: React.FC<UsersViewProps> = ({
                 setBunkFilter('ALL');
                 setStatusFilter('ALL');
               }}
-              className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 transition cursor-pointer"
             >
-              Reset Filters
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset All Filters</span>
             </button>
           )}
         </div>
       </div>
 
       {/* Users Table */}
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900 shadow-2xs">
+      <div className="rounded-2xl border border-[#D4E8E5] dark:border-[#194C47] overflow-hidden bg-white dark:bg-slate-900 shadow-2xs">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
-            <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 uppercase tracking-wider font-semibold text-[11px] border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-[#EAF4F3] dark:bg-[#0A2623] text-[#0E3D38] dark:text-[#5EEAD4] uppercase tracking-wider font-bold text-[11px] border-b border-[#D4E8E5] dark:border-[#194C47]">
               <tr>
                 <th className="px-4 py-3 min-w-[200px]">User & Identity</th>
                 <th className="px-4 py-3 min-w-[140px]">Assigned Role</th>
