@@ -73,7 +73,7 @@ cd backend
 npm install
 npm run dev
 ```
-- Health Check: `http://172.20.10.3:5000/api/health`
+- Health Check: `http://localhost:5000/api/health`
 - Build / Typecheck: `npm run build`
 - Run Tests: `npm test`
 
@@ -94,7 +94,7 @@ npm run dev
 docker compose up -d --build
 ```
 - Frontend: `http://localhost:3000`
-- Backend API: `http://172.20.10.3:5000/api`
+- Backend API: `http://localhost:5000/api`
 - PostgreSQL: `localhost:5432`
 
 ---

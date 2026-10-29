@@ -1,7 +1,7 @@
 import express from 'express';
 import { corsMiddleware } from './middleware/cors.ts';
 import { errorHandler } from './middleware/errorHandler.ts';
-import { requestLogger } from './middleware/requestLogger.ts';
+import { requestResponseLogger, requestLogger } from './middleware/requestLogger.ts';
 import apiRouter from './routes/index.ts';
 
 import path from 'path';
@@ -24,8 +24,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // CORS Middleware
 app.use(corsMiddleware);
 
-// Request Logging Middleware (logs URL, Response Code, and User Name)
-app.use(requestLogger);
+// Request & Response Logging Middleware (logs Method, URL, Response Code, User Name, and API Response Body)
+app.use(requestResponseLogger);
 
 // Mount Central API Routes
 app.use('/api', apiRouter);

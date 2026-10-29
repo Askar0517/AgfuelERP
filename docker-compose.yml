@@ -43,7 +43,7 @@ services:
     ports:
       - "5000:5000"
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://172.20.10.3:5000/api/health || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:5000/api/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -61,7 +61,7 @@ services:
       backend:
         condition: service_healthy
     environment:
-      VITE_API_URL: "http://172.20.10.3:5000"
+      VITE_API_URL: "http://127.0.0.1:5000"
     ports:
       - "3000:80"
     networks:

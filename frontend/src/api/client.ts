@@ -22,7 +22,7 @@ const API_BASE_URL = (
   (typeof window !== 'undefined' && window.location.protocol === 'https:'
     ? '' // Use Vite HTTPS reverse proxy to prevent browser Mixed Content errors
     : (typeof window !== 'undefined' && (window.location.port === '3000' || window.location.port === '5173')
-      ? 'http://172.20.10.3:5000'
+      ? ''
       : ''))
 ).replace(/\/$/, '');
 
