@@ -1,4 +1,24 @@
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from backend directory or project root
+const envPaths = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(process.cwd(), 'backend', '.env'),
+  path.resolve(__dirname, '..', '..', '.env'),
+  path.resolve(__dirname, '..', '..', 'backend', '.env'),
+];
+for (const p of envPaths) {
+  if (fs.existsSync(p)) {
+    dotenv.config({ path: p });
+    break;
+  }
+}
 dotenv.config();
 
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -13,10 +33,17 @@ export const createPool = () => {
   if (!global._postgresPool) {
     const connectionString = process.env.DATABASE_URL;
     if (connectionString) {
+      const isRemote =
+        connectionString.includes('supabase.com') ||
+        connectionString.includes('pooler.supabase') ||
+        connectionString.includes('sslmode=require') ||
+        process.env.DB_SSL === 'true';
+
       global._postgresPool = new Pool({
         connectionString,
         max: 10,
         connectionTimeoutMillis: 15000,
+        ssl: isRemote ? { rejectUnauthorized: false } : undefined,
       });
     } else {
       global._postgresPool = new Pool({
