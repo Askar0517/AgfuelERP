@@ -2,6 +2,7 @@ import express from 'express';
 import { corsMiddleware } from './middleware/cors.ts';
 import { errorHandler } from './middleware/errorHandler.ts';
 import { requestResponseLogger, requestLogger } from './middleware/requestLogger.ts';
+import { healthCheckHandler } from './controllers/healthController.ts';
 import apiRouter from './routes/index.ts';
 
 import path from 'path';
@@ -26,6 +27,11 @@ app.use(corsMiddleware);
 
 // Request & Response Logging Middleware (logs Method, URL, Response Code, User Name, and API Response Body)
 app.use(requestResponseLogger);
+
+// Mount Root-level Health Check & Visual Dashboard
+app.get('/health', healthCheckHandler);
+app.get('/health/dashboard', healthCheckHandler);
+app.get('/status', healthCheckHandler);
 
 // Mount Central API Routes
 app.use('/api', apiRouter);

@@ -13,32 +13,16 @@ import { tankController } from '../controllers/tankController.ts';
 import { nozzleController } from '../controllers/nozzleController.ts';
 import { shiftController } from '../controllers/shiftController.ts';
 import { userController } from '../controllers/userController.ts';
+import { healthCheckHandler } from '../controllers/healthController.ts';
 import { verifyPrivilege } from '../middleware/auth.ts';
 import { getDbSyncStatus, initDbAndSyncTables } from '../db/index.ts';
 import { testSmtpConnection, getMailLog, sendMail } from '../utils/mailHelper.ts';
 
 const apiRouter = Router();
 
-// Health Check Endpoint (Live DB Connection and Table Sync Awareness)
-apiRouter.get('/health', (_req, res) => {
-  const dbStatus = getDbSyncStatus();
-  res.json({
-    status: 'ok',
-    service: 'PetroPulse Fuel ERP Backend',
-    version: '1.0.0',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-    database: {
-      connected: dbStatus ? dbStatus.connection.connected : false,
-      mode: dbStatus ? dbStatus.tableSync.mode : 'IN_MEMORY_FALLBACK',
-      target: dbStatus ? dbStatus.connection.target : 'unknown',
-      engine: dbStatus ? dbStatus.connection.engine : 'In-Memory MockStore',
-      latencyMs: dbStatus?.connection.latencyMs,
-      tablesSynced: dbStatus ? `${dbStatus.tableSync.syncedTablesCount}/${dbStatus.tableSync.totalExpectedTables}` : '15/15',
-    },
-    environment: process.env.NODE_ENV || 'development',
-  });
-});
+// Health Check Endpoints (Comprehensive Live/Cached Diagnostics & Visual HTML Dashboard)
+apiRouter.get('/health', healthCheckHandler);
+apiRouter.get('/health/dashboard', healthCheckHandler);
 
 // Database Diagnostics & Table Synchronization Endpoint
 apiRouter.get('/db/status', async (_req, res) => {
@@ -128,5 +112,3 @@ apiRouter.use('/upload', uploadRoutes);
 apiRouter.use('/uploads', uploadRoutes);
 
 export default apiRouter;
-
-
