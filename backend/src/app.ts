@@ -11,6 +11,25 @@ import os from 'os';
 
 export const app = express();
 
+// Vercel Serverless URL Normalization Middleware
+// When Vercel rewrites incoming routes to /api or /api/index.js, Express receives the internal destination path.
+// This middleware restores the user's original requested URL path from Vercel's x-matched-path / x-forwarded-uri headers.
+app.use((req, _res, next) => {
+  const matchedPath = (req.headers['x-matched-path'] ||
+    req.headers['x-forwarded-uri'] ||
+    req.headers['x-now-route-matches']) as string | undefined;
+
+  if (matchedPath && (req.url === '/api' || req.url.startsWith('/api/index'))) {
+    const queryIdx = req.url.indexOf('?');
+    const queryString = queryIdx !== -1 ? req.url.substring(queryIdx) : '';
+    req.url = matchedPath + queryString;
+  } else if (req.url.startsWith('/api/index.js')) {
+    const stripped = req.url.replace(/^\/api\/index\.js/, '') || '/';
+    req.url = stripped;
+  }
+  next();
+});
+
 // Safe uploads directory initialization (handles read-only filesystems in serverless like Vercel)
 const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 const uploadsDir = isServerless

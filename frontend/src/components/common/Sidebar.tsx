@@ -279,9 +279,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     return (
       <div key={item.id} className="relative flex items-center w-full">
-        {/* Left Activator (Outside the bar, directly flush with zero gap) */}
+        {/* Left Activator: Outside the button bar, sitting on the outer left sidebar border */}
         {isActive && (
-          <span className="w-1 self-stretch my-1 rounded-l-full bg-[#5EEAD4] shadow-[0_0_8px_#5EEAD4] shrink-0 z-10" />
+          <span className="absolute -left-3 top-2 bottom-2 w-1 rounded-r-full bg-[#5EEAD4] shadow-[0_0_10px_#5EEAD4] z-20 pointer-events-none" />
         )}
 
         <button
@@ -290,12 +290,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onMouseEnter={() => setHoveredItem(item.id)}
           onMouseLeave={() => setHoveredItem(null)}
           title={collapsed ? item.label : undefined}
-          className={`group flex-1 flex items-center transition-all duration-150 cursor-pointer select-none ${
-            collapsed ? 'justify-center h-10' : 'justify-start gap-3 px-3 py-2'
+          className={`group w-full flex items-center rounded-xl transition-all duration-150 cursor-pointer select-none ${
+            collapsed ? 'justify-center h-10 w-10 mx-auto' : 'justify-start gap-3 px-3 py-2'
           } ${
             isActive
-              ? 'bg-white/15 text-white font-medium border-y border-emerald-400/40 shadow-xs'
-              : 'rounded-xl text-slate-300/80 hover:text-white hover:bg-white/[0.08] font-normal'
+              ? 'bg-white/15 text-white font-medium border border-emerald-400/30 shadow-xs'
+              : 'text-slate-300/80 hover:text-white hover:bg-white/[0.08] font-normal'
           }`}
         >
           {/* Direct Inline Icon with Brand Mint Accent on Active */}
@@ -352,9 +352,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </button>
 
-        {/* Right Activator (Outside the bar, directly flush with zero gap) */}
+        {/* Right Activator: Outside the button bar, sitting on the outer right sidebar border */}
         {isActive && (
-          <span className="w-1 self-stretch my-1 rounded-r-full bg-[#5EEAD4] shadow-[0_0_8px_#5EEAD4] shrink-0 z-10" />
+          <span className="absolute -right-3 top-2 bottom-2 w-1 rounded-l-full bg-[#5EEAD4] shadow-[0_0_10px_#5EEAD4] z-20 pointer-events-none" />
         )}
       </div>
     );
@@ -363,7 +363,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const renderNavContent = (collapsed: boolean) => (
     <div className="flex flex-col h-full justify-between">
       {/* Scrollable Navigation Items */}
-      <nav className="space-y-1 flex-1 overflow-y-auto no-scrollbar py-1 pr-0.5">
+      <nav className="space-y-1 flex-1 overflow-y-auto no-scrollbar py-1">
         {/* Top Section Header */}
         {!collapsed && (
           <div className="px-3 pt-1 pb-1.5 text-xs font-semibold text-teal-200/80 tracking-tight">
@@ -434,7 +434,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {!collapsed && onOpenProfile && (
           <div className="relative flex items-center w-full">
             {activeTab === 'profile' && (
-              <span className="w-1 self-stretch my-1 rounded-l-full bg-[#5EEAD4] shadow-[0_0_8px_#5EEAD4] shrink-0 z-10" />
+              <span className="absolute -left-3 top-2 bottom-2 w-1 rounded-r-full bg-[#5EEAD4] shadow-[0_0_10px_#5EEAD4] z-20 pointer-events-none" />
             )}
             <button
               type="button"
@@ -442,10 +442,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onCloseMobile();
                 onOpenProfile();
               }}
-              className={`flex-1 flex items-center justify-between p-2 text-left transition-colors duration-150 cursor-pointer ${
+              className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors duration-150 cursor-pointer ${
                 activeTab === 'profile'
-                  ? 'bg-white/15 text-white border-y border-emerald-400/40 shadow-xs'
-                  : 'rounded-xl hover:bg-white/[0.08] text-slate-300'
+                  ? 'bg-white/15 text-white border border-emerald-400/30 shadow-xs'
+                  : 'hover:bg-white/[0.08] text-slate-300'
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
@@ -478,7 +478,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <User className="h-4 w-4 text-teal-300/70 shrink-0" />
             </button>
             {activeTab === 'profile' && (
-              <span className="w-1 self-stretch my-1 rounded-r-full bg-[#5EEAD4] shadow-[0_0_8px_#5EEAD4] shrink-0 z-10" />
+              <span className="absolute -right-3 top-2 bottom-2 w-1 rounded-l-full bg-[#5EEAD4] shadow-[0_0_10px_#5EEAD4] z-20 pointer-events-none" />
             )}
           </div>
         )}
@@ -487,9 +487,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {collapsed && onOpenProfile && (
           <div className="relative flex items-center justify-center w-full py-1">
             {activeTab === 'profile' && (
-              <>
-                <span className="w-1 h-7 rounded-l-full bg-[#5EEAD4] shadow-[0_0_8px_#5EEAD4] shrink-0 z-10" />
-              </>
+              <span className="absolute -left-3 top-2 bottom-2 w-1 rounded-r-full bg-[#5EEAD4] shadow-[0_0_10px_#5EEAD4] z-20 pointer-events-none" />
             )}
             <button
               type="button"
@@ -511,7 +509,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-400 ring-1 ring-[#0B2E2A]" />
             </button>
             {activeTab === 'profile' && (
-              <span className="w-1 h-7 rounded-r-full bg-[#5EEAD4] shadow-[0_0_8px_#5EEAD4] shrink-0 z-10" />
+              <span className="absolute -right-3 top-2 bottom-2 w-1 rounded-l-full bg-[#5EEAD4] shadow-[0_0_10px_#5EEAD4] z-20 pointer-events-none" />
             )}
           </div>
         )}
