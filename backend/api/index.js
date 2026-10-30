@@ -4847,9 +4847,6 @@ function escapeHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// src/routes/index.ts
-import { Router as Router10 } from "express";
-
 // src/routes/authRoutes.ts
 import { Router } from "express";
 
@@ -4957,6 +4954,29 @@ var authController = {
 
 // src/routes/authRoutes.ts
 var router = Router();
+router.get("/", (_req, res) => {
+  res.status(200).json({
+    service: "PetroPulse Authentication API",
+    status: "online",
+    endpoints: {
+      login: "POST /api/auth/login",
+      logout: "POST /api/auth/logout",
+      me: "GET /api/auth/me",
+      forgotPassword: "POST /api/auth/forgot-password",
+      resetPassword: "POST /api/auth/reset-password",
+      changePassword: "POST /api/auth/change-password"
+    }
+  });
+});
+router.get("/login", (_req, res) => {
+  res.status(200).json({
+    status: "online",
+    message: "Auth login endpoint is active.",
+    instruction: "Send an HTTP POST request with JSON body { usernameOrEmail, password } to authenticate.",
+    method: "POST",
+    path: "/api/auth/login"
+  });
+});
 router.post("/login", authController.login);
 router.post("/logout", authController.logout);
 router.get("/me", authController.me);
@@ -4964,6 +4984,9 @@ router.post("/forgot-password", authController.forgotPassword);
 router.post("/reset-password", authController.resetPassword);
 router.post("/change-password", authController.changePassword);
 var authRoutes_default = router;
+
+// src/routes/index.ts
+import { Router as Router10 } from "express";
 
 // src/routes/stationRoutes.ts
 import { Router as Router2 } from "express";
@@ -6368,7 +6391,9 @@ app.get("/", healthCheckHandler);
 app.get("/health", healthCheckHandler);
 app.get("/health/dashboard", healthCheckHandler);
 app.get("/status", healthCheckHandler);
+app.use("/auth", authRoutes_default);
 app.use("/api", routes_default);
+app.use("/api/api", routes_default);
 app.use(errorHandler);
 var app_default = app;
 export {

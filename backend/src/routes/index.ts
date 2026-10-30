@@ -21,7 +21,7 @@ import { testSmtpConnection, getMailLog, sendMail } from '../utils/mailHelper.ts
 const apiRouter = Router();
 
 // Health Check Endpoints (Comprehensive Live/Cached Diagnostics & Visual HTML Dashboard)
-apiRouter.get('/health', healthCheckHandler);
+apiRouter.get(' ', healthCheckHandler);
 apiRouter.get('/health/dashboard', healthCheckHandler);
 
 // Database Diagnostics & Table Synchronization Endpoint

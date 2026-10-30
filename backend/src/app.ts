@@ -3,6 +3,7 @@ import { corsMiddleware } from './middleware/cors.ts';
 import { errorHandler } from './middleware/errorHandler.ts';
 import { requestResponseLogger, requestLogger } from './middleware/requestLogger.ts';
 import { healthCheckHandler } from './controllers/healthController.ts';
+import authRoutes from './routes/authRoutes.ts';
 import apiRouter from './routes/index.ts';
 
 import path from 'path';
@@ -63,8 +64,14 @@ app.get('/health', healthCheckHandler);
 app.get('/health/dashboard', healthCheckHandler);
 app.get('/status', healthCheckHandler);
 
+// Mount Auth routes directly at /auth as well as /api/auth for maximum client compatibility
+app.use('/auth', authRoutes);
+
 // Mount Central API Routes
 app.use('/api', apiRouter);
+
+// Defensive fallback: handle double /api prefixes from misconfigured frontend VITE_API_URL
+app.use('/api/api', apiRouter);
 
 // Centralized Error Handling
 app.use(errorHandler);

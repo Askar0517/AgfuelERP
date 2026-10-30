@@ -17,14 +17,17 @@ import {
   DailySalesReport,
 } from '../types';
 
-const API_BASE_URL = (
+const rawApiUrl = (
   (import.meta as any).env?.VITE_API_URL ||
   (typeof window !== 'undefined' && window.location.protocol === 'https:'
     ? '' // Use Vite HTTPS reverse proxy to prevent browser Mixed Content errors
     : (typeof window !== 'undefined' && (window.location.port === '3000' || window.location.port === '5173')
       ? ''
       : ''))
-).replace(/\/$/, '');
+).trim().replace(/\/+$/, '');
+
+// Avoid duplicate /api when VITE_API_URL is supplied with trailing /api
+const API_BASE_URL = rawApiUrl.replace(/\/api$/, '');
 
 let currentActiveRole: UserRole = 'OWNER';
 let authToken: string | null = typeof window !== 'undefined' ? localStorage.getItem('petropulse_token') : null;
