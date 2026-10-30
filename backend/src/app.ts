@@ -29,7 +29,7 @@ app.use(corsMiddleware);
 app.use(requestResponseLogger);
 
 // Mount Root-level Health Check & Visual Dashboard
-app.get('/health', healthCheckHandler);
+app.get('/', healthCheckHandler);
 app.get('/health/dashboard', healthCheckHandler);
 app.get('/status', healthCheckHandler);
 
