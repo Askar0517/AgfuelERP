@@ -1,13 +1,22 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 
 const router = Router();
 
-// Ensure uploads folder exists in working directory
-const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+// Ensure uploads folder exists in working directory or /tmp in serverless
+const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const UPLOADS_DIR = isServerless
+  ? path.join(os.tmpdir(), 'uploads')
+  : path.resolve(process.cwd(), 'uploads');
+
+try {
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  }
+} catch (err: any) {
+  console.warn('[Uploads Directory Init Warning]:', err.message);
 }
 
 interface UploadBody {

@@ -7,15 +7,25 @@ import apiRouter from './routes/index.ts';
 
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 
 export const app = express();
 
-const uploadsDir = path.resolve(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+// Safe uploads directory initialization (handles read-only filesystems in serverless like Vercel)
+const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const uploadsDir = isServerless
+  ? path.join(os.tmpdir(), 'uploads')
+  : path.resolve(process.cwd(), 'uploads');
+
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (err: any) {
+  console.warn('[Uploads Directory Init Warning]:', err.message);
 }
 
-// Serve uploaded media statically from local disk
+// Serve uploaded media statically
 app.use('/uploads', express.static(uploadsDir));
 
 // Body Parser Middleware with expanded limits for high-resolution photo uploads
@@ -30,6 +40,7 @@ app.use(requestResponseLogger);
 
 // Mount Root-level Health Check & Visual Dashboard
 app.get('/', healthCheckHandler);
+app.get('/health', healthCheckHandler);
 app.get('/health/dashboard', healthCheckHandler);
 app.get('/status', healthCheckHandler);
 
