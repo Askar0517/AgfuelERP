@@ -4,7 +4,7 @@ import { CONFIG } from '../config/index.ts';
 export function corsMiddleware(req: Request, res: Response, next: NextFunction) {
   const allowedOrigins = CONFIG.CORS_ORIGIN.split(',').map((s) => s.trim());
   const origin = req.headers.origin;
-
+  console.log(origin, "origin");
   if (origin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else {
