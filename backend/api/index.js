@@ -6361,32 +6361,6 @@ import path3 from "path";
 import fs3 from "fs";
 import os2 from "os";
 var app = express();
-app.use((req, _res, next) => {
-  const pathParam = req.query.__path;
-  if (pathParam) {
-    delete req.query.__path;
-    const queryIdx = req.url.indexOf("?");
-    let queryString = "";
-    if (queryIdx !== -1) {
-      const sp = new URLSearchParams(req.url.substring(queryIdx + 1));
-      sp.delete("__path");
-      const qs = sp.toString();
-      queryString = qs ? `?${qs}` : "";
-    }
-    req.url = (pathParam.startsWith("/") ? pathParam : `/${pathParam}`) + queryString;
-    return next();
-  }
-  const matchedPath = req.headers["x-matched-path"] || req.headers["x-invoke-path"] || req.headers["x-forwarded-uri"] || req.headers["x-now-route-matches"];
-  if (matchedPath && (req.url === "/api" || req.url.startsWith("/api/index"))) {
-    const queryIdx = req.url.indexOf("?");
-    const queryString = queryIdx !== -1 ? req.url.substring(queryIdx) : "";
-    req.url = (matchedPath.startsWith("/") ? matchedPath : `/${matchedPath}`) + queryString;
-  } else if (req.url.startsWith("/api/index.js")) {
-    const stripped = req.url.replace(/^\/api\/index\.js/, "") || "/";
-    req.url = stripped;
-  }
-  next();
-});
 var isServerless2 = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 var uploadsDir = isServerless2 ? path3.join(os2.tmpdir(), "uploads") : path3.resolve(process.cwd(), "uploads");
 try {
