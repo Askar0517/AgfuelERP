@@ -278,10 +278,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const isHovered = hoveredItem === item.id;
 
     return (
-      <div key={item.id} className="relative flex items-center w-full">
-        {/* Left Activator: Outside the button bar, sitting on the outer left sidebar border */}
+      <div key={item.id} className="relative flex items-center w-full px-3">
+        {/* Left Activator: Flush on the outer left sidebar border (left: 0) with zero gap */}
         {isActive && (
-          <span className="absolute -left-3 top-2 bottom-2 w-1 rounded-r-full bg-[#5EEAD4] shadow-[0_0_10px_#5EEAD4] z-20 pointer-events-none" />
+          <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-[#5EEAD4] shadow-[0_0_10px_#5EEAD4] z-20 pointer-events-none" />
         )}
 
         <button
@@ -352,9 +352,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </button>
 
-        {/* Right Activator: Outside the button bar, sitting on the outer right sidebar border */}
+        {/* Right Activator: Flush on the outer right sidebar border (right: 0) with zero gap */}
         {isActive && (
-          <span className="absolute -right-3 top-2 bottom-2 w-1 rounded-l-full bg-[#5EEAD4] shadow-[0_0_10px_#5EEAD4] z-20 pointer-events-none" />
+          <span className="absolute right-0 top-1.5 bottom-1.5 w-1 rounded-l-full bg-[#5EEAD4] shadow-[0_0_10px_#5EEAD4] z-20 pointer-events-none" />
         )}
       </div>
     );
@@ -395,22 +395,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div key={section.title} className="space-y-0.5 pt-1.5">
               {/* Accordion Category Header Button */}
               {!collapsed ? (
-                <button
-                  type="button"
-                  onClick={() => toggleSection(section.category)}
-                  className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-white/[0.06] transition-colors duration-150 group cursor-pointer text-left select-none"
-                  aria-expanded={isSectionOpen}
-                >
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-teal-200/80 group-hover:text-white truncate">
-                    {section.title}
-                  </span>
+                <div className="px-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section.category)}
+                    className="w-full flex items-center justify-between px-3 py-1.5 rounded-xl hover:bg-white/[0.06] transition-colors duration-150 group cursor-pointer text-left select-none"
+                    aria-expanded={isSectionOpen}
+                  >
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-teal-200/80 group-hover:text-white truncate">
+                      {section.title}
+                    </span>
 
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 text-teal-300/60 group-hover:text-white transition-transform duration-200 ${
-                      isSectionOpen ? 'rotate-0' : '-rotate-90'
-                    }`}
-                  />
-                </button>
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 text-teal-300/60 group-hover:text-white transition-transform duration-200 ${
+                        isSectionOpen ? 'rotate-0' : '-rotate-90'
+                      }`}
+                    />
+                  </button>
+                </div>
               ) : (
                 <div className="py-2 flex justify-center">
                   <div className="h-[1px] w-6 bg-white/15" />
@@ -429,7 +431,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* 3. Bottom Profile & Action Controls */}
-      <div className="pt-2 border-t border-white/15 space-y-1 shrink-0">
+      <div className="pt-2 border-t border-white/15 space-y-1 shrink-0 px-3">
         {/* Profile Floating Card (Expanded) */}
         {!collapsed && onOpenProfile && (
           <div className="relative flex items-center w-full">
@@ -578,9 +580,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             isMobileOpen ? 'translate-x-0' : '-translate-x-[110%]'
           }`}
         >
-          <div className="flex h-full flex-col p-4 safe-area-pb text-white">
+          <div className="flex h-full flex-col py-3 px-0 safe-area-pb text-white">
             {/* Header Brand */}
-            <div className="flex items-center justify-between border-b border-white/15 pb-3 mb-2">
+            <div className="flex items-center justify-between border-b border-white/15 pb-3 mb-2 px-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="p-1 rounded-xl bg-white/10 border border-white/20">
                   <img
@@ -625,7 +627,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }`}
       >
         {/* Floating Shell Panel */}
-        <div className="relative flex h-full flex-col p-3 rounded-3xl border border-[#175C54]/70 bg-gradient-to-b from-[#0E3D38] via-[#0B332E] to-[#072421] text-white backdrop-blur-2xl shadow-[0_20px_50px_-10px_rgba(11,46,42,0.45)] overflow-hidden">
+        <div className="relative flex h-full flex-col py-3 px-0 rounded-3xl border border-[#175C54]/70 bg-gradient-to-b from-[#0E3D38] via-[#0B332E] to-[#072421] text-white backdrop-blur-2xl shadow-[0_20px_50px_-10px_rgba(11,46,42,0.45)] overflow-hidden">
           {/* Navigation Links and Logout in Bottom */}
           <div className="flex-1 overflow-hidden flex flex-col">
             {renderNavContent(isCollapsed)}

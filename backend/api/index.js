@@ -6291,7 +6291,7 @@ var uploadRoutes_default = router9;
 
 // src/routes/index.ts
 var apiRouter = Router10();
-apiRouter.get("/health", healthCheckHandler);
+apiRouter.get(" ", healthCheckHandler);
 apiRouter.get("/health/dashboard", healthCheckHandler);
 apiRouter.get("/db/status", async (_req, res) => {
   let status = getDbSyncStatus();
@@ -6362,11 +6362,25 @@ import fs3 from "fs";
 import os2 from "os";
 var app = express();
 app.use((req, _res, next) => {
-  const matchedPath = req.headers["x-matched-path"] || req.headers["x-forwarded-uri"] || req.headers["x-now-route-matches"];
+  const pathParam = req.query.__path;
+  if (pathParam) {
+    delete req.query.__path;
+    const queryIdx = req.url.indexOf("?");
+    let queryString = "";
+    if (queryIdx !== -1) {
+      const sp = new URLSearchParams(req.url.substring(queryIdx + 1));
+      sp.delete("__path");
+      const qs = sp.toString();
+      queryString = qs ? `?${qs}` : "";
+    }
+    req.url = (pathParam.startsWith("/") ? pathParam : `/${pathParam}`) + queryString;
+    return next();
+  }
+  const matchedPath = req.headers["x-matched-path"] || req.headers["x-invoke-path"] || req.headers["x-forwarded-uri"] || req.headers["x-now-route-matches"];
   if (matchedPath && (req.url === "/api" || req.url.startsWith("/api/index"))) {
     const queryIdx = req.url.indexOf("?");
     const queryString = queryIdx !== -1 ? req.url.substring(queryIdx) : "";
-    req.url = matchedPath + queryString;
+    req.url = (matchedPath.startsWith("/") ? matchedPath : `/${matchedPath}`) + queryString;
   } else if (req.url.startsWith("/api/index.js")) {
     const stripped = req.url.replace(/^\/api\/index\.js/, "") || "/";
     req.url = stripped;
@@ -6391,6 +6405,8 @@ app.get("/", healthCheckHandler);
 app.get("/health", healthCheckHandler);
 app.get("/health/dashboard", healthCheckHandler);
 app.get("/status", healthCheckHandler);
+app.get("/api", healthCheckHandler);
+app.get("/api/", healthCheckHandler);
 app.use("/auth", authRoutes_default);
 app.use("/api", routes_default);
 app.use("/api/api", routes_default);
