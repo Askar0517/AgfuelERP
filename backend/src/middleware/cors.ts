@@ -1,24 +1,33 @@
 import { Request, Response, NextFunction } from 'express';
-import { CONFIG } from '../config/index.ts';
 
 export function corsMiddleware(req: Request, res: Response, next: NextFunction) {
-  const allowedOrigins = CONFIG.CORS_ORIGIN.split(',').map((s) => s.trim());
   const origin = req.headers.origin;
-  console.log(origin, "origin");
+
   if (origin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'Content-Type, Authorization, x-user-role, x-station-id, x-user-name'
-  );
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
 
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
+
+  // Dynamically mirror requested preflight headers or fallback to comprehensive list
+  const requestHeaders = req.headers['access-control-request-headers'];
+  if (requestHeaders) {
+    res.setHeader('Access-Control-Allow-Headers', requestHeaders);
+  } else {
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization, x-user-role, x-station-id, x-user-name, Accept, Origin, X-Requested-With, Cache-Control, Pragma, sentry-trace, baggage'
+    );
+  }
+
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400');
+
+  // Handle CORS preflight OPTIONS request
   if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
+    return res.status(204).end();
   }
   next();
 }
