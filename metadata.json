@@ -1,0 +1,8 @@
+{
+  "name": "AG Fuels ERP",
+  "description": "Enterprise forecourt management, multi-station petrol bunk monitoring, automated tank gauging, nozzle totalizers, staff shift settlement, and daily sales reconciliation.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ],
+  "permissions": []
+}
