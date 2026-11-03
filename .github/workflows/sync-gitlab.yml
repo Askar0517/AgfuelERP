@@ -19,13 +19,13 @@ jobs:
       - name: Push to GitLab
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-          GITLAB_PROJECT: ${{ secrets.GITLAB_PROJECT || 'Askar0517/AgfuelERP' }}
+          GITLAB_PROJECT: ${{ secrets.GITLAB_PROJECT || 'abdulaskar45/agfuel' }}
         run: |
           if [ -z "$GITLAB_TOKEN" ]; then
             echo "::error::GITLAB_TOKEN secret is missing or empty! Please add GITLAB_TOKEN in GitHub repository: Settings -> Secrets and variables -> Actions."
             exit 1
           fi
 
-          echo "Syncing repository to GitLab: $GITLAB_PROJECT..."
-          git push --prune --mirror "https://oauth2:${GITLAB_TOKEN}@gitlab.com/${GITLAB_PROJECT}.git"
+          echo "Syncing branches and tags to GitLab: $GITLAB_PROJECT..."
+          git push --prune --force "https://oauth2:${GITLAB_TOKEN}@gitlab.com/${GITLAB_PROJECT}.git" "+refs/heads/*:refs/heads/*" "+refs/tags/*:refs/tags/*"
           echo "Successfully synced to GitLab!"
